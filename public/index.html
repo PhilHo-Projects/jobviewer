@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Viewer</title>
+    <link rel="stylesheet" href="/job-viewer/styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="topbar">
+                <h1>Job Viewer</h1>
+                <div class="controls">
+                    <button id="refresh" type="button">Refresh from server</button>
+                    <div class="status" id="statusText"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="board" aria-label="Job tracking board">
+            <div class="column" aria-label="New jobs">
+                <div class="column-header">
+                    <div class="column-title">New <small>(<span id="count-new">0</span>)</small></div>
+                </div>
+                <div id="zone-new" class="dropzone" data-status="new"></div>
+            </div>
+
+            <div class="column" aria-label="In progress jobs">
+                <div class="column-header">
+                    <div class="column-title">In Progress <small>(<span id="count-inprogress">0</span>)</small></div>
+                </div>
+                <div id="zone-inprogress" class="dropzone" data-status="in_progress"></div>
+            </div>
+
+            <div class="column" aria-label="Completed jobs">
+                <div class="column-header">
+                    <div class="column-title">Completed <small>(<span id="count-completed">0</span>)</small></div>
+                </div>
+                <div id="zone-completed" class="dropzone" data-status="completed"></div>
+            </div>
+        </section>
+    </main>
+
+    <div id="modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Job details">
+        <div class="modal" role="document">
+            <header>
+                <h2 id="modal-title"></h2>
+                <button id="modal-close" type="button">Close</button>
+            </header>
+            <div id="modal-body" class="content"></div>
+            <div class="row">
+                <button id="modal-save" type="button">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/job-viewer/app.js"></script>
+</body>
+</html>
