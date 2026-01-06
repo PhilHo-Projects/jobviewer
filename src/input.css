@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+
+    /* Custom scrollbar for better look in dark mode */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #020617;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #1e293b;
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+    }
+}
+
+@layer components {
+
+    /* Drag and Drop visual feedback */
+    .dropzone.drag-over {
+        background-color: rgba(30, 41, 59, 0.4) !important;
+        border-color: #3b82f6 !important;
+        border-style: dashed !important;
+        border-width: 2px !important;
+    }
+
+    /* Ensure cards are easily draggable */
+    .card {
+        user-select: none;
+        -webkit-user-drag: element;
+    }
+}
+
+@layer utilities {
+
+    /* Modal specific tweaks not easily handled by Tailwind opacity/scale transition */
+    #modal-backdrop:not(.hidden) {
+        display: flex !important;
+    }
+}

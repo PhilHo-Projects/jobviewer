@@ -16,7 +16,20 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-app.use(BASE_PATH, express.static(path.join(__dirname, 'public')));
+// Serve static files from 'dist' directory in production
+// In development, Vite handles the frontend and proxies API requests here.
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(BASE_PATH, express.static(distPath));
+  // Support client-side routing by serving index.html for unknown routes under BASE_PATH
+  app.get(`${BASE_PATH}/*`, (req, res, next) => {
+    if (req.path.startsWith(`${BASE_PATH}/api`)) return next();
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  // Fallback for when 'dist' doesn't exist (e.g., during initial setup or dev without build)
+  app.use(BASE_PATH, express.static(path.join(__dirname, 'public')));
+}
 
 // Store latest job data in memory
 let latestJobs = [];
