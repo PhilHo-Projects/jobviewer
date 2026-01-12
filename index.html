@@ -55,10 +55,13 @@
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto p-4 md:p-6">
-        <section class="grid grid-cols-1 md:grid-cols-3 gap-6" aria-label="Job tracking board">
+    <main class="max-w-7xl mx-auto p-4 md:p-6 overflow-hidden">
+        <section
+            class="flex md:grid md:grid-cols-3 gap-6 overflow-x-auto snap-x snap-mandatory pb-8 md:pb-0 hide-scrollbar"
+            aria-label="Job tracking board">
             <!-- New Column -->
-            <div class="column-wrapper flex flex-col shadow-xl overflow-hidden">
+            <div
+                class="column-wrapper snap-center shrink-0 w-[calc(100vw-2rem)] md:w-auto flex flex-col shadow-xl overflow-hidden">
                 <div class="column-header flex items-center justify-between p-4 border-b">
                     <div class="flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span>
@@ -67,12 +70,14 @@
                     <span id="count-new"
                         class="px-2 py-0.5 rounded-full bg-theme-button text-theme-muted text-[11px] font-bold">0</span>
                 </div>
-                <div id="zone-new" class="dropzone flex-1 min-h-[70vh] p-3 space-y-3 overflow-y-auto transition-colors"
+                <div id="zone-new"
+                    class="dropzone flex-1 min-h-[60vh] md:min-h-[70vh] p-3 space-y-3 overflow-y-auto transition-colors"
                     data-status="new"></div>
             </div>
 
             <!-- In Progress Column -->
-            <div class="column-wrapper flex flex-col shadow-xl overflow-hidden">
+            <div
+                class="column-wrapper snap-center shrink-0 w-[calc(100vw-2rem)] md:w-auto flex flex-col shadow-xl overflow-hidden">
                 <div class="column-header flex items-center justify-between p-4 border-b">
                     <div class="flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]"></span>
@@ -82,12 +87,13 @@
                         class="px-2 py-0.5 rounded-full bg-theme-button text-theme-muted text-[11px] font-bold">0</span>
                 </div>
                 <div id="zone-inprogress"
-                    class="dropzone flex-1 min-h-[70vh] p-3 space-y-3 overflow-y-auto transition-colors"
+                    class="dropzone flex-1 min-h-[60vh] md:min-h-[70vh] p-3 space-y-3 overflow-y-auto transition-colors"
                     data-status="in_progress"></div>
             </div>
 
             <!-- Completed Column -->
-            <div class="column-wrapper flex flex-col shadow-xl overflow-hidden">
+            <div
+                class="column-wrapper snap-center shrink-0 w-[calc(100vw-2rem)] md:w-auto flex flex-col shadow-xl overflow-hidden">
                 <div class="column-header flex items-center justify-between p-4 border-b">
                     <div class="flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
@@ -97,7 +103,7 @@
                         class="px-2 py-0.5 rounded-full bg-theme-button text-theme-muted text-[11px] font-bold">0</span>
                 </div>
                 <div id="zone-completed"
-                    class="dropzone flex-1 min-h-[70vh] p-3 space-y-3 overflow-y-auto transition-colors"
+                    class="dropzone flex-1 min-h-[60vh] md:min-h-[70vh] p-3 space-y-3 overflow-y-auto transition-colors"
                     data-status="completed"></div>
             </div>
         </section>
