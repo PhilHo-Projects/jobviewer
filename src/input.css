@@ -32,6 +32,35 @@
         --font-weight-bold: 700;
     }
 
+    h1 {
+        font-family: var(--font-heading) !important;
+        font-size: 2.25rem;
+        /* 3xl */
+        font-weight: 900;
+        letter-spacing: -1px;
+        text-transform: uppercase;
+        font-style: normal !important;
+    }
+
+    @keyframes celebrate {
+
+        0%,
+        100% {
+            transform: scale(1);
+            filter: hue-rotate(0deg);
+        }
+
+        50% {
+            transform: scale(1.1);
+            filter: hue-rotate(180deg);
+        }
+    }
+
+    .animate-celebrate {
+        animation: celebrate 5s infinite ease-in-out;
+        box-shadow: 0 0 15px var(--bg-accent) !important;
+    }
+
     .theme-brutalist {
         --bg-body: #F9F5EA;
         --bg-header: #F9F5EA;
@@ -41,8 +70,8 @@
         --bg-input: #FFFFFF;
         --bg-button: #FFFFFF;
         --bg-button-hover: #e5e5e5;
-        --bg-accent: #ff0040;
-        --bg-accent-hover: #cc0033;
+        --bg-accent: #facc15;
+        --bg-accent-hover: #ca8a04;
         --bg-destructive: #FF5C5C;
         --bg-success: #22c55e;
         --bg-info: #3b82f6;
@@ -254,11 +283,40 @@
         border-width: 2px !important;
     }
 
-    /* ===== Status badges ===== */
+    /* ===== Status badges & Details Button ===== */
+    .status-badge {
+        transition: all 0.2s ease;
+    }
+
+    .theme-dark .status-badge {
+        border-radius: 9999px;
+        opacity: 0.9;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
     .theme-brutalist .status-badge {
         border-width: 2px !important;
         border-color: #000 !important;
+        box-shadow: 2px 2px 0 #000;
         font-weight: 900;
+        border-radius: 0;
+    }
+
+    .theme-brutalist .details-btn {
+        border-width: var(--border-width) !important;
+        border-color: #000 !important;
+        box-shadow: 3px 3px 0 #000;
+        border-radius: 0;
+    }
+
+    .theme-brutalist .details-btn:hover {
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0 #000;
+    }
+
+    .theme-brutalist .card:hover .text-theme-primary {
+        color: var(--text-primary) !important;
     }
 
     /* ===== Text colors ===== */

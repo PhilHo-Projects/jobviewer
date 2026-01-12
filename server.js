@@ -72,7 +72,8 @@ function normalizeIncomingJob(job) {
   const normalized = { ...job };
   normalized.id = normalized.id || createStableJobId(normalized);
   normalized.status = normalized.status || 'new';
-  normalized.statusSummary = normalized.statusSummary || 'New job';
+  normalized.statusSummary = normalized.statusSummary || 'New Job';
+  normalized.statusSummaryUpdatedAt = normalized.statusSummaryUpdatedAt || nowIso;
   normalized.notes = typeof normalized.notes === 'string' ? normalized.notes : '';
   normalized.scrapedDate = normalized.scrapedDate || nowIso;
   normalized.appliedDate = normalized.appliedDate || null;
@@ -99,7 +100,7 @@ function upsertJobs(incomingJobs) {
       ...existing,
       ...j,
       status: existing.status || j.status || 'new',
-      statusSummary: existing.statusSummary || j.statusSummary || 'New job',
+      statusSummary: existing.statusSummary || j.statusSummary || 'New Job',
       notes: typeof existing.notes === 'string' ? existing.notes : (typeof j.notes === 'string' ? j.notes : ''),
       scrapedDate: existing.scrapedDate || j.scrapedDate,
       appliedDate: existing.appliedDate || j.appliedDate || null
@@ -163,13 +164,25 @@ app.patch(`${BASE_PATH}/api/jobs/:id`, (req, res) => {
 
   const next = { ...latestJobs[idx] };
   if (status !== undefined) next.status = status;
-  if (statusSummary !== undefined) next.statusSummary = statusSummary;
+  if (statusSummary !== undefined) {
+    next.statusSummary = statusSummary;
+    next.statusSummaryUpdatedAt = new Date().toISOString();
+  }
   if (notes !== undefined) next.notes = notes;
   if (appliedDate !== undefined) next.appliedDate = appliedDate;
 
   latestJobs[idx] = next;
   saveJobsToDisk(latestJobs);
   res.json(next);
+});
+
+app.delete(`${BASE_PATH}/api/jobs/status/:status`, (req, res) => {
+  const { status } = req.params;
+  const beforeCount = (latestJobs || []).length;
+  latestJobs = (latestJobs || []).filter(j => j.status !== status);
+  const afterCount = (latestJobs || []).length;
+  saveJobsToDisk(latestJobs);
+  res.json({ deleted: beforeCount - afterCount, remaining: afterCount });
 });
 
 app.listen(PORT, () => {

@@ -39,6 +39,7 @@ function applyTheme(theme) {
     THEMES.forEach(t => html.classList.remove(`theme-${t}`));
     html.classList.add(`theme-${theme}`);
     localStorage.setItem(THEME_KEY, theme);
+    if (typeof renderBoard === 'function') renderBoard();
 }
 
 function toggleTheme() {
@@ -149,32 +150,42 @@ function renderCard(job, isDeleted = false) {
     const id = escapeHtml(job.id);
     const status = escapeHtml(job.status || 'new');
     const hasUrl = Boolean(job.url);
-    const dateStr = job.posted || (job.scrapedDate ? `Scraped ${new Date(job.scrapedDate).toLocaleDateString()}` : '');
+    const dateStr = job.posted ? `Found ${job.posted}` : (job.scrapedDate ? `Found on ${new Date(job.scrapedDate).toLocaleDateString()}` : '');
 
     const sLow = statusSummary.toLowerCase();
     let statusBadgeClasses = 'bg-blue-500 text-white border-black'; // Default fallback
 
+    // Simplified coloring for status badges
+    const isBrutalist = document.documentElement.classList.contains('theme-brutalist');
+    const updatedAt = job.statusSummaryUpdatedAt ? new Date(job.statusSummaryUpdatedAt) : null;
+    let dateStrFormatted = '';
+    if (updatedAt) {
+        const d = String(updatedAt.getDate()).padStart(2, '0');
+        const m = String(updatedAt.getMonth() + 1).padStart(2, '0');
+        const y = String(updatedAt.getFullYear()).slice(-2);
+        dateStrFormatted = `${d}/${m}/${y}`;
+    }
+
     if (status === 'completed') {
-        if (sLow.includes('interview')) {
+        if (sLow.includes('got the job')) {
+            statusBadgeClasses = 'bg-emerald-500 text-white border-black animate-celebrate';
+        } else if (sLow.includes('rejected') || sLow.includes('ghosted')) {
             statusBadgeClasses = 'bg-[#ff0040] text-white border-black';
-        } else if (sLow.includes('rejected') || sLow.includes('denied') || sLow.includes('ghosted')) {
-            statusBadgeClasses = 'bg-black text-white border-black';
         } else {
-            statusBadgeClasses = 'bg-[#3b82f6] text-white border-black';
+            statusBadgeClasses = 'bg-black text-white border-black';
         }
     } else if (status === 'in_progress') {
-        statusBadgeClasses = 'bg-[#3b82f6] text-white border-black';
+        statusBadgeClasses = 'bg-emerald-400 text-black border-black';
     } else {
         statusBadgeClasses = 'bg-white text-black border-black';
     }
 
     // Add extra brutalist styling if theme is active
-    if (document.documentElement.classList.contains('theme-brutalist')) {
+    if (isBrutalist) {
         statusBadgeClasses += ' border-2 shadow-[2px_2px_0_#000]';
     } else {
         statusBadgeClasses += ' rounded-full px-3 opacity-90';
     }
-
     return `
     <article class="card group relative p-4 transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md ${isDeleted ? 'opacity-70 grayscale-[0.5]' : ''}" 
              draggable="${!isDeleted}" data-job-id="${id}" data-status="${status}">
@@ -194,7 +205,7 @@ function renderCard(job, isDeleted = false) {
         `}
       </div>
 
-      <div class="flex flex-wrap gap-x-3 gap-y-1 mb-3">
+      <div class="flex flex-wrap gap-x-3 gap-y-1 mb-2">
         <span class="text-[11px] font-medium text-theme-secondary flex items-center gap-1.5">
           <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-7h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
           ${company}
@@ -203,25 +214,31 @@ function renderCard(job, isDeleted = false) {
           <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
           ${location}
         </span>
-        ${dateStr ? `
-        <span class="text-[11px] font-medium text-theme-muted flex items-center gap-1.5">
-          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-          ${escapeHtml(dateStr)}
-        </span>
-        ` : ''}
       </div>
 
+      ${dateStr ? `
+      <div class="flex items-center gap-1.5 mb-3">
+        <span class="text-[11px] font-bold text-theme-muted flex items-center gap-1.5">
+          <svg class="w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+          ${escapeHtml(dateStr)}
+        </span>
+      </div>
+      ` : ''}
+
       <div class="flex items-center gap-2 mb-3">
-        ${statusSummary ? `
-            <div class="inline-flex items-center px-2 py-0.5 rounded border ${statusBadgeClasses} text-[10px] font-bold uppercase tracking-wider">
-            ${statusSummary}
+        ${(statusSummary && status !== 'new') ? `
+            <div class="flex items-center gap-2">
+                <div class="status-badge inline-flex items-center px-2 py-0.5 rounded border ${statusBadgeClasses} text-[10px] font-bold uppercase tracking-wider">
+                    ${statusSummary}
+                </div>
+                ${dateStrFormatted ? `<span class="text-[9px] font-bold text-theme-muted">${dateStrFormatted}</span>` : ''}
             </div>
-        ` : ''}
+` : ''}
       </div>
 
       <div class="flex items-center justify-between mt-auto gap-3 pt-3 border-t border-theme-border">
         <button type="button" data-action="expand" data-job-id="${id}" 
-                class="inline-flex items-center justify-center rounded-md bg-theme-button hover:bg-theme-button-hover text-theme-primary text-[11px] font-bold px-3 py-1.5 transition-colors border border-theme-border">
+                class="details-btn inline-flex items-center justify-center rounded-md bg-theme-button hover:bg-theme-button-hover text-theme-primary text-[11px] font-bold px-3 py-1.5 transition-all border border-theme-border">
           Details
         </button>
         ${hasUrl ? `
@@ -262,6 +279,20 @@ function wireCardHandlers(container) {
 
     for (const card of container.querySelectorAll('.card')) {
         card.addEventListener('dblclick', () => openModal(card.getAttribute('data-job-id')));
+    }
+}
+
+async function clearBin() {
+    if (!confirm('Are you sure you want to empty the recycle bin? This cannot be undone.')) return;
+    try {
+        const res = await fetch(`${API_BASE}/jobs/status/deleted`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Failed to clear bin');
+        jobs = jobs.filter(j => j.status !== 'deleted');
+        renderBoard();
+        setStatus('Bin cleared');
+    } catch (e) {
+        console.error(e);
+        setStatus('Failed to clear bin');
     }
 }
 
@@ -335,8 +366,7 @@ function wireDropzones() {
 
             const prevStatus = job.status;
             job.status = z.status;
-
-            if (!job.statusSummary) job.statusSummary = defaultStatusSummaryFor(z.status);
+            job.statusSummary = defaultStatusSummaryFor(z.status);
 
             if (z.status === 'completed' && (job.statusSummary || '').toLowerCase() === 'applied' && !job.appliedDate) {
                 job.appliedDate = new Date().toISOString();
@@ -363,9 +393,9 @@ function wireDropzones() {
 }
 
 function defaultStatusSummaryFor(status) {
-    if (status === 'in_progress') return 'In progress';
-    if (status === 'completed') return 'Completed';
-    return 'New job';
+    if (status === 'in_progress') return 'Easy Applied';
+    if (status === 'completed') return 'Rejected';
+    return 'New Job';
 }
 
 async function patchJob(id, payload) {
@@ -498,9 +528,13 @@ function openModal(jobId) {
 
 function renderStatusSummaryOptions(status, currentValue) {
     const presets = {
-        new: ['New job'],
-        in_progress: ['Researching company', 'Drafting email', 'Sent email', 'Preparing CV', 'In progress'],
-        completed: ['Applied', 'Interview scheduled', 'Rejected', 'Ghosted/Ignored', 'Completed']
+        new: ['New Job'],
+        in_progress: [
+            'Easy Applied', 'Applied by Email', 'Applied via Website',
+            'Messaged Recruiter', 'Screening Call', 'First Interview',
+            'Second Interview', 'Third Interview', 'Final Interview'
+        ],
+        completed: ['Rejected', 'Ghosted', 'Got the job!!']
     };
 
     const list = presets[status] || ['New job'];
@@ -527,7 +561,7 @@ async function saveModal() {
     const appliedEl = $('modal-appliedDate');
     const errorEl = els.modalError;
 
-    if (!statusEl || !summaryEl || !notesEl || !appliedEl) return;
+    if (!notesEl) return;
     if (errorEl) {
         errorEl.textContent = '';
         errorEl.classList.add('hidden');
@@ -538,10 +572,10 @@ async function saveModal() {
     const locationEl = $('modal-input-location');
     const urlEl = $('modal-input-url');
 
-    const status = statusEl.value;
-    const statusSummary = summaryEl.value;
+    const status = statusEl ? statusEl.value : 'new';
+    const statusSummary = summaryEl ? summaryEl.value : defaultStatusSummaryFor(status);
     const notes = notesEl.value;
-    const appliedDateValue = appliedEl.value;
+    const appliedDateValue = appliedEl ? appliedEl.value : '';
 
     let appliedDate = null;
     if (appliedDateValue) {
@@ -650,7 +684,7 @@ function openAddModal() {
     if (els.modalBody) {
         els.modalBody.innerHTML = `
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div class="flex flex-col gap-1.5">
+        <div class="flex flex-col gap-1.5 md:col-span-2">
           <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Job Title *</label>
           <input id="modal-input-title" type="text" placeholder="Software Engineer"
                  class="input-field text-sm px-3 py-2.5 outline-none" />
@@ -665,34 +699,12 @@ function openAddModal() {
           <input id="modal-input-location" type="text" placeholder="Remote / New York"
                  class="input-field text-sm px-3 py-2.5 outline-none" />
         </div>
-        <div class="flex flex-col gap-1.5">
+        <div class="flex flex-col gap-1.5 md:col-span-2">
           <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Link</label>
           <input id="modal-input-url" type="url" placeholder="https://..."
                  class="input-field text-sm px-3 py-2.5 outline-none" />
         </div>
         
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Status</label>
-          <select id="modal-status" class="input-field text-sm px-3 py-2.5 outline-none appearance-none cursor-pointer">
-            <option value="new" selected>New</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Status Summary</label>
-          <select id="modal-statusSummary" class="input-field text-sm px-3 py-2.5 outline-none appearance-none cursor-pointer">
-            ${renderStatusSummaryOptions('new', 'New job')}
-          </select>
-        </div>
-
-        <div class="flex flex-col gap-1.5 md:col-span-2">
-          <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Applied Date</label>
-          <input id="modal-appliedDate" type="date" value="" 
-                 class="input-field text-sm px-3 py-2.5 outline-none cursor-pointer" />
-        </div>
-
         <div class="flex flex-col gap-1.5 md:col-span-2">
           <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Notes</label>
           <textarea id="modal-notes" class="input-field text-sm px-3 py-3 outline-none min-h-[120px] resize-none" 
@@ -700,14 +712,6 @@ function openAddModal() {
         </div>
       </div>
     `;
-    }
-
-    const statusEl = $('modal-status');
-    const summaryEl = $('modal-statusSummary');
-    if (statusEl && summaryEl) {
-        statusEl.addEventListener('change', () => {
-            summaryEl.innerHTML = renderStatusSummaryOptions(statusEl.value, summaryEl.value);
-        });
     }
 
     if (els.modalBackdrop) {
@@ -774,6 +778,10 @@ function init() {
 
     const binClose = $('bin-close');
     if (binClose) binClose.addEventListener('click', closeBin);
+
+    const binClear = $('bin-clear');
+    if (binClear) binClear.addEventListener('click', clearBin);
+
     if (els.binBackdrop) {
         els.binBackdrop.addEventListener('click', (e) => {
             if (e.target === els.binBackdrop) closeBin();
