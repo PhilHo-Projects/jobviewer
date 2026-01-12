@@ -20,6 +20,6 @@ jobs:
           cd ~/projects/job-viewer
           git pull origin main
           npm install
-          pm2 delete job-viewer || true
-          pm2 start ecosystem.config.js --env production
+          npm run build
+          pm2 start ecosystem.config.cjs --env production --update-env || pm2 restart ecosystem.config.cjs --env production
           pm2 save

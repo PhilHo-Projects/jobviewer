@@ -4,46 +4,329 @@
 
 @layer base {
 
-    /* Custom scrollbar for better look in dark mode */
+    /* ===== Theme Variables ===== */
+    .theme-dark {
+        --bg-body: #020617;
+        --bg-header: rgba(2, 6, 23, 0.8);
+        --bg-column: rgba(15, 23, 42, 0.5);
+        --bg-card: #1e293b;
+        --bg-card-hover: rgba(30, 41, 59, 0.8);
+        --bg-input: #020617;
+        --bg-button: #1e293b;
+        --bg-button-hover: #334155;
+        --bg-accent: #3b82f6;
+        --bg-accent-hover: #2563eb;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        --border-color: #334155;
+        --border-column: rgba(30, 41, 59, 0.6);
+        --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1);
+        --shadow-card-hover: 0 4px 6px rgba(0, 0, 0, 0.1);
+        --shadow-accent: 0 4px 14px rgba(59, 130, 246, 0.2);
+        --radius-sm: 0.5rem;
+        --radius-md: 0.75rem;
+        --radius-lg: 1rem;
+        --radius-xl: 1.5rem;
+        --border-width: 1px;
+        --font-weight-bold: 700;
+    }
+
+    .theme-brutalist {
+        --bg-body: #F9F5EA;
+        --bg-header: #F9F5EA;
+        --bg-column: #FFFFFF;
+        --bg-card: #FFFFFF;
+        --bg-card-hover: #FFFFFF;
+        --bg-input: #FFFFFF;
+        --bg-button: #FFFFFF;
+        --bg-button-hover: #e5e5e5;
+        --bg-accent: #ff0040;
+        --bg-accent-hover: #cc0033;
+        --bg-destructive: #FF5C5C;
+        --bg-success: #22c55e;
+        --bg-info: #3b82f6;
+        --text-primary: #0a0a0a;
+        --text-secondary: #0a0a0a;
+        --text-muted: #333333;
+        --border-color: #0a0a0a;
+        --border-column: #0a0a0a;
+        --shadow-card: 6px 6px 0 #0a0a0a;
+        --shadow-card-hover: 2px 2px 0 #0a0a0a;
+        --shadow-accent: 4px 4px 0 #0a0a0a;
+        --radius-sm: 0;
+        --radius-md: 0;
+        --radius-lg: 0;
+        --radius-xl: 0;
+        --border-width: 4px;
+        /* More chunky */
+        --font-weight-bold: 900;
+
+        /* Fonts */
+        --font-body: 'IBM Plex Mono', monospace;
+        --font-heading: 'Archivo Black', sans-serif;
+    }
+
+    /* Apply theme to body */
+    html {
+        background-color: var(--bg-body);
+        color: var(--text-primary);
+        font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+        transition: background-color 0.2s ease;
+    }
+
+    .theme-brutalist h1,
+    .theme-brutalist h2,
+    .theme-brutalist h3,
+    .theme-brutalist .column-header h2 {
+        font-family: var(--font-heading);
+        letter-spacing: -1px;
+        font-weight: normal;
+        text-transform: uppercase;
+    }
+
+    .theme-brutalist #modal-backdrop,
+    .theme-brutalist #bin-backdrop {
+        background-color: rgba(0, 0, 0, 0.4) !important;
+        backdrop-filter: none !important;
+        /* Remove blur for brutalist */
+    }
+
+    /* Custom scrollbar */
     ::-webkit-scrollbar {
         width: 8px;
     }
 
     ::-webkit-scrollbar-track {
-        background: #020617;
+        background: var(--bg-body);
     }
 
     ::-webkit-scrollbar-thumb {
-        background: #1e293b;
-        border-radius: 4px;
+        background: var(--border-color);
+        border-radius: var(--radius-sm);
     }
 
     ::-webkit-scrollbar-thumb:hover {
-        background: #334155;
+        background: var(--text-muted);
     }
 }
 
 @layer components {
 
-    /* Drag and Drop visual feedback */
+    /* ===== Header ===== */
+    header {
+        background-color: var(--bg-header) !important;
+        border-color: var(--border-color) !important;
+        backdrop-filter: blur(12px);
+    }
+
+    .theme-brutalist header {
+        border-bottom-width: var(--border-width) !important;
+        backdrop-filter: none;
+    }
+
+    /* ===== Columns ===== */
+    .column-wrapper {
+        background-color: var(--bg-column);
+        border-color: var(--border-column);
+        border-radius: var(--radius-xl);
+        border-width: var(--border-width);
+        box-shadow: none !important;
+        /* Remove soft Tailwind shadows */
+    }
+
+    .theme-brutalist .column-wrapper {
+        box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.1) !important;
+        /* Subtle but hard shadow for columns */
+    }
+
+    .column-header {
+        background-color: var(--bg-column);
+        border-color: var(--border-column);
+    }
+
+    /* ===== Cards ===== */
+    .card {
+        background-color: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+        border-radius: var(--radius-md) !important;
+        border-width: var(--border-width) !important;
+        box-shadow: var(--shadow-card) !important;
+        user-select: none;
+        -webkit-user-drag: element;
+    }
+
+    .card:hover {
+        background-color: var(--bg-card-hover) !important;
+        box-shadow: var(--shadow-card-hover) !important;
+    }
+
+    .theme-brutalist .card {
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .theme-brutalist .card:hover {
+        transform: translate(2px, 2px);
+        box-shadow: var(--shadow-card-hover) !important;
+    }
+
+    /* ===== Buttons ===== */
+    .btn-icon {
+        background-color: var(--bg-button);
+        border-color: var(--border-color);
+        border-width: var(--border-width);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        box-shadow: var(--shadow-card);
+    }
+
+    .btn-icon:hover {
+        background-color: var(--bg-button-hover);
+    }
+
+    .theme-brutalist .btn-icon:hover {
+        transform: translate(2px, 2px);
+        box-shadow: var(--shadow-card-hover);
+    }
+
+    .btn-accent {
+        background-color: var(--bg-accent);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-accent);
+    }
+
+    .btn-accent:hover {
+        background-color: var(--bg-accent-hover);
+    }
+
+    .theme-brutalist .btn-accent {
+        border: var(--border-width) solid #000;
+        color: #000;
+    }
+
+    .theme-brutalist .btn-accent:hover {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0 #000;
+    }
+
+    /* ===== Inputs & Selects ===== */
+    .input-field {
+        background-color: var(--bg-input) !important;
+        border-color: var(--border-color) !important;
+        border-radius: var(--radius-md) !important;
+        border-width: var(--border-width) !important;
+        color: var(--text-primary) !important;
+        box-shadow: none !important;
+    }
+
+    .theme-brutalist .input-field:focus {
+        box-shadow: 3px 3px 0 var(--bg-accent);
+    }
+
+    /* ===== Modals ===== */
+    .modal-container {
+        background-color: var(--bg-card);
+        border-color: var(--border-color);
+        border-radius: var(--radius-xl);
+        border-width: var(--border-width);
+        box-shadow: var(--shadow-card-hover);
+    }
+
+    .theme-brutalist .modal-container {
+        box-shadow: 8px 8px 0 #000;
+    }
+
+    .modal-header {
+        background-color: var(--bg-column);
+        border-color: var(--border-color);
+    }
+
+    .modal-footer {
+        background-color: var(--bg-column);
+        border-color: var(--border-color);
+    }
+
+    /* ===== Dropzone feedback ===== */
     .dropzone.drag-over {
-        background-color: rgba(30, 41, 59, 0.4) !important;
-        border-color: #3b82f6 !important;
+        background-color: var(--bg-card-hover) !important;
+        border-color: var(--bg-accent) !important;
         border-style: dashed !important;
         border-width: 2px !important;
     }
 
-    /* Ensure cards are easily draggable */
-    .card {
-        user-select: none;
-        -webkit-user-drag: element;
+    /* ===== Status badges ===== */
+    .theme-brutalist .status-badge {
+        border-width: 2px !important;
+        border-color: #000 !important;
+        font-weight: 900;
+    }
+
+    /* ===== Text colors ===== */
+    .text-theme-primary {
+        color: var(--text-primary);
+    }
+
+    .text-theme-secondary {
+        color: var(--text-secondary);
+    }
+
+    .text-theme-muted {
+        color: var(--text-muted);
+    }
+
+    .text-theme-accent {
+        color: #3b82f6;
+    }
+
+    /* ===== Background colors ===== */
+    .bg-theme-body {
+        background-color: var(--bg-body);
+    }
+
+    .bg-theme-header {
+        background-color: var(--bg-header);
+    }
+
+    .bg-theme-column {
+        background-color: var(--bg-column);
+    }
+
+    .bg-theme-card {
+        background-color: var(--bg-card);
+    }
+
+    .bg-theme-input {
+        background-color: var(--bg-input);
+    }
+
+    .bg-theme-accent {
+        background-color: var(--bg-accent);
+    }
+
+    .bg-theme-button {
+        background-color: var(--bg-button);
+    }
+
+    /* ===== Border colors ===== */
+    .border-theme-border {
+        border-color: var(--border-color);
+    }
+
+    .border-theme-column {
+        border-color: var(--border-column);
+    }
+
+    /* ===== Transitions ===== */
+    .theme-transition {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
 }
 
 @layer utilities {
 
-    /* Modal specific tweaks not easily handled by Tailwind opacity/scale transition */
-    #modal-backdrop:not(.hidden) {
+    /* Modal display fix */
+    #modal-backdrop:not(.hidden),
+    #bin-backdrop:not(.hidden) {
         display: flex !important;
     }
 }
