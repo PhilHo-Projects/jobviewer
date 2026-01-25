@@ -23,33 +23,19 @@ const els = {
     binEmpty: null,
     addBtn: null,
     binBtn: null,
-    themeBtn: null
+    scoreboardBtn: null,
+    scoreboardBackdrop: null,
+    scoreSlider: null,
+    scoreSliderVal: null,
+    scorePercentPrecise: null,
+    countdownClock: null,
+    modalPointsText: null,
+    modalProgressFill: null,
+    modalProgressPercent: null,
+    modalMotivationalText: null
 };
 
-// ===== Theme Management =====
-const THEME_KEY = 'jobviewer-theme';
-const THEMES = ['dark', 'brutalist'];
 
-function getStoredTheme() {
-    return localStorage.getItem(THEME_KEY) || 'dark';
-}
-
-function applyTheme(theme) {
-    const html = document.documentElement;
-    THEMES.forEach(t => html.classList.remove(`theme-${t}`));
-    html.classList.add(`theme-${theme}`);
-    localStorage.setItem(THEME_KEY, theme);
-    if (typeof renderBoard === 'function') renderBoard();
-}
-
-function toggleTheme() {
-    console.log('Toggling theme...');
-    console.trace('Who called toggleTheme?');
-    const current = getStoredTheme();
-    const next = current === 'dark' ? 'brutalist' : 'dark';
-    console.log('Current:', current, 'Next:', next);
-    applyTheme(next);
-}
 
 function $(id) {
     return document.getElementById(id);
@@ -153,10 +139,6 @@ function renderCard(job, isDeleted = false) {
     const dateStr = job.posted ? `Found ${job.posted}` : (job.scrapedDate ? `Found on ${new Date(job.scrapedDate).toLocaleDateString()}` : '');
 
     const sLow = statusSummary.toLowerCase();
-    let statusBadgeClasses = 'bg-blue-500 text-white border-black'; // Default fallback
-
-    // Simplified coloring for status badges
-    const isBrutalist = document.documentElement.classList.contains('theme-brutalist');
     const updatedAt = job.statusSummaryUpdatedAt ? new Date(job.statusSummaryUpdatedAt) : null;
     let dateStrFormatted = '';
     if (updatedAt) {
@@ -166,6 +148,7 @@ function renderCard(job, isDeleted = false) {
         dateStrFormatted = `${d}/${m}/${y}`;
     }
 
+    let statusBadgeClasses = 'bg-blue-500 text-white border-black'; // Default fallback
     if (status === 'completed') {
         if (sLow.includes('got the job')) {
             statusBadgeClasses = 'bg-emerald-500 text-white border-black animate-celebrate';
@@ -180,12 +163,7 @@ function renderCard(job, isDeleted = false) {
         statusBadgeClasses = 'bg-white text-black border-black';
     }
 
-    // Add extra brutalist styling if theme is active
-    if (isBrutalist) {
-        statusBadgeClasses += ' border-2 shadow-[2px_2px_0_#000]';
-    } else {
-        statusBadgeClasses += ' rounded-full px-3 opacity-90';
-    }
+    statusBadgeClasses += ' border-2 shadow-[2px_2px_0_#000]';
     return `
     <article class="card group relative p-4 transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md ${isDeleted ? 'opacity-70 grayscale-[0.5]' : ''}" 
              draggable="${!isDeleted}" data-job-id="${id}" data-status="${status}">
@@ -748,9 +726,114 @@ function closeBin() {
     }
 }
 
+function updateScoreboardUI(percent) {
+    const p = parseFloat(percent);
+
+    // Update Slider UI
+    if (els.scoreSlider) els.scoreSlider.value = p;
+    if (els.scoreSliderVal) els.scoreSliderVal.textContent = `${p.toFixed(2)}%`;
+
+    // Color LERPing logic
+    let r, g, b;
+    if (p < 30) {
+        r = 239; g = 68; b = 68;
+    } else if (p < 80) {
+        const t = (p - 30) / 50;
+        r = Math.round(239 + (250 - 239) * t);
+        g = Math.round(68 + (204 - 68) * t);
+        b = Math.round(68 + (21 - 68) * t);
+    } else {
+        const t = (p - 80) / 20;
+        r = Math.round(250 + (34 - 250) * t);
+        g = Math.round(204 + (197 - 204) * t);
+        b = Math.round(21 + (94 - 21) * t);
+    }
+
+    const color = `rgb(${r}, ${g}, ${b})`;
+
+    // Update Header Pizza Pie
+    if (els.scoreboardBtn) {
+        els.scoreboardBtn.style.background = `conic-gradient(${color} ${p}%, #e5e5e5 ${p}%)`;
+    }
+    if (els.scorePercentPrecise) {
+        els.scorePercentPrecise.textContent = `${p.toFixed(2)}%`;
+    }
+
+    // Update Modal Progress Bar
+    if (els.modalProgressFill) {
+        els.modalProgressFill.style.width = `${p}%`;
+        els.modalProgressFill.style.backgroundColor = color;
+    }
+    if (els.modalProgressPercent) {
+        els.modalProgressPercent.textContent = `${p.toFixed(2)}%`;
+    }
+    if (els.modalPointsText) {
+        els.modalPointsText.textContent = `${Math.round(p * 10)} Points`;
+    }
+
+    // Update Motivational Text
+    if (els.modalMotivationalText) {
+        if (p === 0) els.modalMotivationalText.textContent = "Start your engines, let's get some applications in!";
+        else if (p < 30) els.modalMotivationalText.textContent = "Picking up speed... keep going!";
+        else if (p < 80) els.modalMotivationalText.textContent = "You're in the zone! Keep that momentum!";
+        else if (p < 100) els.modalMotivationalText.textContent = "Almost there! Just a few more!";
+        else els.modalMotivationalText.textContent = "GOAL REACHED! You're a beast!";
+    }
+}
+
+function startCountdown() {
+    function update() {
+        const now = new Date();
+        const nextSunday = new Date();
+        nextSunday.setDate(now.getDate() + (7 - now.getDay()));
+        nextSunday.setHours(23, 59, 59, 999);
+
+        const diff = nextSunday - now;
+        if (diff <= 0) {
+            if (els.countdownClock) els.countdownClock.textContent = "00:00:00";
+            return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24) + (days * 24);
+        const mins = Math.floor((diff / 1000 / 60) % 60);
+        const secs = Math.floor((diff / 1000) % 60);
+
+        if (els.countdownClock) {
+            els.countdownClock.textContent =
+                `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+    }
+    update();
+    setInterval(update, 1000);
+}
+
+function openScoreboard() {
+    if (els.scoreboardBackdrop) {
+        els.scoreboardBackdrop.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            els.scoreboardBackdrop.classList.remove('opacity-0');
+            const doc = els.scoreboardBackdrop.querySelector('[role="document"]');
+            if (doc) doc.classList.remove('scale-95');
+        });
+    }
+}
+
+function closeScoreboard() {
+    if (els.scoreboardBackdrop) {
+        els.scoreboardBackdrop.classList.add('opacity-0');
+        const doc = els.scoreboardBackdrop.querySelector('[role="document"]');
+        if (doc) doc.classList.add('scale-95');
+        setTimeout(() => {
+            if (els.scoreboardBackdrop.classList.contains('opacity-0')) {
+                els.scoreboardBackdrop.classList.add('hidden');
+            }
+        }, 200);
+    }
+}
+
 function init() {
-    // Apply saved theme immediately
-    applyTheme(getStoredTheme());
+
 
     els.refreshBtn = $('refresh');
     els.statusText = $('statusText');
@@ -769,15 +852,33 @@ function init() {
     els.binEmpty = $('bin-empty');
     els.addBtn = $('add-job');
     els.binBtn = $('view-bin');
-    els.themeBtn = $('theme-toggle');
+    els.scoreboardBtn = $('view-scoreboard');
+    els.scoreboardBackdrop = $('scoreboard-backdrop');
+    els.scoreSlider = $('score-slider');
+    els.scoreSliderVal = $('score-slider-val');
+    els.scorePercentPrecise = $('score-percent-precise');
+    els.countdownClock = $('countdown-clock');
+    els.modalPointsText = $('modal-points-text');
+    els.modalProgressFill = $('modal-progress-fill');
+    els.modalProgressPercent = $('modal-progress-percent');
+    els.modalMotivationalText = $('modal-motivational-text');
 
     if (els.refreshBtn) els.refreshBtn.addEventListener('click', fetchJobs);
     if (els.addBtn) els.addBtn.addEventListener('click', openAddModal);
     if (els.binBtn) els.binBtn.addEventListener('click', openBin);
-    if (els.themeBtn) els.themeBtn.addEventListener('click', toggleTheme);
+    if (els.scoreboardBtn) els.scoreboardBtn.addEventListener('click', openScoreboard);
+
+    if (els.scoreSlider) {
+        els.scoreSlider.addEventListener('input', (e) => {
+            updateScoreboardUI(e.target.value);
+        });
+    }
 
     const binClose = $('bin-close');
     if (binClose) binClose.addEventListener('click', closeBin);
+
+    const scoreClose = $('scoreboard-close');
+    if (scoreClose) scoreClose.addEventListener('click', closeScoreboard);
 
     const binClear = $('bin-clear');
     if (binClear) binClear.addEventListener('click', clearBin);
@@ -788,8 +889,20 @@ function init() {
         });
     }
 
+    if (els.scoreboardBackdrop) {
+        els.scoreboardBackdrop.addEventListener('click', (e) => {
+            if (e.target === els.scoreboardBackdrop) closeScoreboard();
+        });
+    }
+
     wireDropzones();
     wireModal();
+
+    // Init UI with 0 progress
+    updateScoreboardUI(0);
+
+    // Start Stress Countdown
+    startCountdown();
 
     fetchJobs();
 }
