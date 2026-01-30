@@ -37,8 +37,10 @@ if (fs.existsSync(distPath)) {
 
 // Store latest job data in memory
 let latestJobs = [];
+let questHistory = [];
 
 const JOBS_FILE_PATH = path.join(__dirname, 'jobs.json');
+const HISTORY_FILE_PATH = path.join(__dirname, 'history.json');
 
 function loadJobsFromDisk() {
   try {
@@ -58,6 +60,19 @@ function saveJobsToDisk(jobs) {
     fs.writeFileSync(JOBS_FILE_PATH, JSON.stringify(jobs, null, 2), 'utf8');
   } catch (err) {
     console.error('Failed to save jobs to disk:', err);
+  }
+}
+
+function loadHistoryFromDisk() {
+  try {
+    if (!fs.existsSync(HISTORY_FILE_PATH)) return [];
+    const raw = fs.readFileSync(HISTORY_FILE_PATH, 'utf8');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error('Failed to load history from disk:', err);
+    return [];
   }
 }
 
@@ -113,6 +128,12 @@ function upsertJobs(incomingJobs) {
 }
 
 latestJobs = loadJobsFromDisk();
+questHistory = loadHistoryFromDisk();
+
+// Endpoint for history
+app.get(`${BASE_PATH}/api/history`, (req, res) => {
+  res.json(questHistory);
+});
 
 // Endpoint for n8n to POST pruned job data
 app.post(`${BASE_PATH}/api/receive-jobs`, (req, res) => {
