@@ -3,6 +3,7 @@ import './input.css';
 const API_BASE = '/job-viewer/api';
 
 let jobs = [];
+let history = [];
 let activeJobId = null;
 
 const els = {
@@ -80,6 +81,7 @@ async function fetchJobs() {
         const data = await res.json();
         jobs = Array.isArray(data) ? data : [];
         renderBoard();
+        calculateAndRefreshScore();
         setStatus(`Loaded ${jobs.length} job${jobs.length === 1 ? '' : 's'}`);
     } catch (e) {
         console.error(e);
@@ -126,6 +128,8 @@ function renderBoard() {
     wireCardHandlers(els.inProgressZone);
     wireCardHandlers(els.completedZone);
     wireCardHandlers(els.binList);
+
+    calculateAndRefreshScore();
 }
 
 function renderCard(job, isDeleted = false) {
@@ -136,7 +140,18 @@ function renderCard(job, isDeleted = false) {
     const id = escapeHtml(job.id);
     const status = escapeHtml(job.status || 'new');
     const hasUrl = Boolean(job.url);
-    const dateStr = job.posted ? `Found ${job.posted}` : (job.scrapedDate ? `Found on ${new Date(job.scrapedDate).toLocaleDateString()}` : '');
+
+    // Use absolute date from scrapedDate instead of relative 'posted' strings
+    let dateStr = '';
+    const dateObj = job.scrapedDate ? new Date(job.scrapedDate) : null;
+    if (dateObj && !isNaN(dateObj.getTime())) {
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const y = String(dateObj.getFullYear()).slice(-2);
+        dateStr = `Found ${d}/${m}/${y}`;
+    } else if (job.posted) {
+        dateStr = `Found ${job.posted}`;
+    }
 
     const sLow = statusSummary.toLowerCase();
     const updatedAt = job.statusSummaryUpdatedAt ? new Date(job.statusSummaryUpdatedAt) : null;
@@ -343,12 +358,14 @@ function wireDropzones() {
             if (job.status === z.status) return;
 
             const prevStatus = job.status;
+
+            // If moving out of 'new' for the first time this week, or changing tracked status
+            if (prevStatus === 'new' && (z.status === 'in_progress' || z.status === 'completed')) {
+                if (!job.appliedDate) job.appliedDate = new Date().toISOString();
+            }
+
             job.status = z.status;
             job.statusSummary = defaultStatusSummaryFor(z.status);
-
-            if (z.status === 'completed' && (job.statusSummary || '').toLowerCase() === 'applied' && !job.appliedDate) {
-                job.appliedDate = new Date().toISOString();
-            }
 
             renderBoard();
 
@@ -726,34 +743,58 @@ function closeBin() {
     }
 }
 
+function getLastReset() {
+    const next = getNextResetForHistory();
+    const last = new Date(next);
+    last.setDate(next.getDate() - 7);
+    return last;
+}
+
+function getNextResetForHistory() {
+    const now = new Date();
+    const nextReset = new Date(now);
+    const day = now.getDay();
+    const daysUntilMonday = (day === 0) ? 1 : (8 - day);
+    nextReset.setDate(now.getDate() + daysUntilMonday);
+    nextReset.setHours(5, 0, 0, 0);
+
+    if (day === 1 && now.getHours() < 5) {
+        nextReset.setDate(now.getDate());
+    } else if (day === 1 && now.getHours() >= 5) {
+        nextReset.setDate(now.getDate() + 7);
+    }
+    return nextReset;
+}
+
+function getCurrentWeekRange() {
+    const last = getLastReset();
+    const next = getNextResetForHistory();
+
+    const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${fmt(last)} - ${fmt(new Date(next.getTime() - 1))}`;
+}
+
 function updateScoreboardUI(percent) {
     const p = parseFloat(percent);
 
-    // Update Slider UI
-    if (els.scoreSlider) els.scoreSlider.value = p;
-    if (els.scoreSliderVal) els.scoreSliderVal.textContent = `${p.toFixed(2)}%`;
-
-    // Color LERPing logic
-    let r, g, b;
-    if (p < 30) {
-        r = 239; g = 68; b = 68;
-    } else if (p < 80) {
-        const t = (p - 30) / 50;
-        r = Math.round(239 + (250 - 239) * t);
-        g = Math.round(68 + (204 - 68) * t);
-        b = Math.round(68 + (21 - 68) * t);
-    } else {
-        const t = (p - 80) / 20;
-        r = Math.round(250 + (34 - 250) * t);
-        g = Math.round(204 + (197 - 204) * t);
-        b = Math.round(21 + (94 - 21) * t);
+    // Update Week Title
+    const weekTitleEl = $('current-week-title');
+    if (weekTitleEl) {
+        weekTitleEl.textContent = `Current Week (${getCurrentWeekRange()})`;
     }
 
-    const color = `rgb(${r}, ${g}, ${b})`;
+    // Update Slider UI
+    if (els.scoreSlider) els.scoreSlider.value = p;
+    if (els.scoreSliderVal) els.scoreSliderVal.textContent = `${Math.round(p)}%`;
+
+    // Simplify Color Logic: Use theme-accent for the fill
+    const color = 'var(--color-theme-accent, #facc15)';
 
     // Update Header Pizza Pie
     if (els.scoreboardBtn) {
-        els.scoreboardBtn.style.background = `conic-gradient(${color} ${p}%, #e5e5e5 ${p}%)`;
+        // Handle overflow (>100%) by keeping it full color
+        const piePercent = Math.min(p, 100);
+        els.scoreboardBtn.style.background = `conic-gradient(${color} ${piePercent}%, #e5e5e5 ${piePercent}%)`;
     }
     if (els.scorePercentPrecise) {
         els.scorePercentPrecise.textContent = `${p.toFixed(2)}%`;
@@ -761,41 +802,77 @@ function updateScoreboardUI(percent) {
 
     // Update Modal Progress Bar
     if (els.modalProgressFill) {
-        els.modalProgressFill.style.width = `${p}%`;
+        // Handle overflow (>100%) by capping width at 100% 
+        // but the label will still show the true percentage
+        const flowPercent = Math.min(p, 100);
+        els.modalProgressFill.style.width = `${flowPercent}%`;
         els.modalProgressFill.style.backgroundColor = color;
     }
     if (els.modalProgressPercent) {
-        els.modalProgressPercent.textContent = `${p.toFixed(2)}%`;
+        els.modalProgressPercent.textContent = `${Math.round(p)}%`;
+        // Change text color for better readability if background is too bright/dark
+        els.modalProgressPercent.style.color = 'black';
     }
     if (els.modalPointsText) {
-        els.modalPointsText.textContent = `${Math.round(p * 10)} Points`;
-    }
-
-    // Update Motivational Text
-    if (els.modalMotivationalText) {
-        if (p === 0) els.modalMotivationalText.textContent = "Start your engines, let's get some applications in!";
-        else if (p < 30) els.modalMotivationalText.textContent = "Picking up speed... keep going!";
-        else if (p < 80) els.modalMotivationalText.textContent = "You're in the zone! Keep that momentum!";
-        else if (p < 100) els.modalMotivationalText.textContent = "Almost there! Just a few more!";
-        else els.modalMotivationalText.textContent = "GOAL REACHED! You're a beast!";
+        // 10 points per 10% (1 point per application if goal is 10)
+        // Actually let's make it 100 points per 100% (10 points per app)
+        els.modalPointsText.textContent = `${Math.round(p)} Points`;
     }
 }
 
+function calculateAndRefreshScore() {
+    const lastReset = getLastReset();
+
+    // Filter jobs moved out of 'new' this week
+    const currentWeekJobs = jobs.filter(j => {
+        if (!j.appliedDate) return false;
+        if (j.status === 'new' || j.status === 'deleted') return false;
+        const appDate = new Date(j.appliedDate);
+        return appDate >= lastReset;
+    });
+
+    const percent = currentWeekJobs.length * 10;
+    updateScoreboardUI(percent);
+
+    // Update current week list preview (optional but cool)
+    const container = $('scoreboard-history');
+    // We'll keep the current week's list separate or just focus on history below
+}
+
 function startCountdown() {
+    function getNextReset() {
+        const now = new Date();
+        const nextReset = new Date(now);
+
+        // Target Monday (1)
+        const day = now.getDay();
+        const daysUntilMonday = (day === 0) ? 1 : (8 - day);
+
+        nextReset.setDate(now.getDate() + daysUntilMonday);
+        nextReset.setHours(5, 0, 0, 0);
+
+        // If today is Monday and it's before 5am, the reset is today
+        if (day === 1 && now.getHours() < 5) {
+            nextReset.setDate(now.getDate());
+        } else if (day === 1 && now.getHours() >= 5) {
+            // Already past 5am Monday, next reset is next week
+            nextReset.setDate(now.getDate() + 7);
+        }
+
+        return nextReset;
+    }
+
     function update() {
         const now = new Date();
-        const nextSunday = new Date();
-        nextSunday.setDate(now.getDate() + (7 - now.getDay()));
-        nextSunday.setHours(23, 59, 59, 999);
+        const nextReset = getNextReset();
 
-        const diff = nextSunday - now;
+        const diff = nextReset - now;
         if (diff <= 0) {
             if (els.countdownClock) els.countdownClock.textContent = "00:00:00";
             return;
         }
 
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24) + (days * 24);
+        const hours = Math.floor(diff / (1000 * 60 * 60));
         const mins = Math.floor((diff / 1000 / 60) % 60);
         const secs = Math.floor((diff / 1000) % 60);
 
@@ -808,7 +885,61 @@ function startCountdown() {
     setInterval(update, 1000);
 }
 
+async function fetchHistory() {
+    try {
+        const res = await fetch(`${API_BASE}/history`);
+        if (!res.ok) throw new Error('Failed to load history');
+        history = await res.json();
+        renderHistory();
+    } catch (e) {
+        console.error('History fetch error:', e);
+    }
+}
+
+function renderHistory() {
+    const container = $('scoreboard-history');
+    if (!container) return;
+
+    if (history.length === 0) {
+        container.innerHTML = `
+            <div class="text-[10px] font-bold text-theme-muted uppercase tracking-widest text-center py-4 border-2 border-dashed border-black/5 rounded-lg">
+                No history yet. Complete your first week!
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = `
+        <h4 class="text-[10px] font-black uppercase tracking-widest text-theme-muted mb-4">Past Quests</h4>
+        <div class="space-y-4">
+            ${history.map(h => `
+                <div class="history-item border-l-2 border-theme-border pl-4 py-1">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-black uppercase text-theme-secondary">${escapeHtml(h.weekRange)}</span>
+                        <span class="text-[10px] font-bold text-theme-accent">${Math.round(h.percent)}%</span>
+                    </div>
+                    <div class="relative w-full h-1.5 bg-black/5 rounded-full overflow-hidden mb-2">
+                        <div class="absolute h-full bg-theme-accent opacity-50" style="width: ${Math.min(h.percent, 100)}%"></div>
+                    </div>
+                    ${h.jobTitles && h.jobTitles.length > 0 ? `
+                        <details class="group">
+                            <summary class="text-[9px] font-bold text-theme-muted cursor-pointer hover:text-theme-primary list-none flex items-center gap-1 uppercase tracking-tighter">
+                                <svg class="w-2 h-2 transition-transform group-open:rotate-90" fill="currentColor" viewBox="0 0 20 20"><path d="M6 6L14 10L6 14V6Z"/></svg>
+                                View ${h.jobTitles.length} Job Titles
+                            </summary>
+                            <ul class="mt-2 space-y-1 pl-3 border-l border-theme-border/50">
+                                ${h.jobTitles.map(t => `<li class="text-[10px] font-medium text-theme-secondary truncate">• ${escapeHtml(t)}</li>`).join('')}
+                            </ul>
+                        </details>
+                    ` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 function openScoreboard() {
+    fetchHistory(); // Refresh history when opening
     if (els.scoreboardBackdrop) {
         els.scoreboardBackdrop.classList.remove('hidden');
         requestAnimationFrame(() => {
@@ -898,8 +1029,8 @@ function init() {
     wireDropzones();
     wireModal();
 
-    // Init UI with 0 progress
-    updateScoreboardUI(0);
+    // Init UI with calculated progress
+    calculateAndRefreshScore();
 
     // Start Stress Countdown
     startCountdown();

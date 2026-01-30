@@ -228,25 +228,12 @@
                 </button>
             </header>
             <div id="scoreboard-body" class="p-6 overflow-y-auto flex-1 space-y-8">
-                <!-- Score Control Slider -->
-                <div class="p-6 bg-black text-white space-y-4 shadow-[8px_8px_0_#facc15]">
-                    <div class="flex justify-between items-center">
-                        <label class="text-xs font-black uppercase tracking-widest text-[#facc15]">Manual Progress
-                            Adjuster</label>
-                        <span id="score-slider-val" class="text-xl font-black">0%</span>
-                    </div>
-                    <input type="range" id="score-slider" min="0" max="100" value="0"
-                        class="w-full h-4 bg-[#333] appearance-none cursor-pointer border-2 border-white accent-[#facc15] focus:outline-none">
-                    <p class="text-[10px] font-bold text-gray-400">Drag to simulate score progression (OCD testing mode)
-                    </p>
-                </div>
-
-                <!-- Example Week Row -->
+                <!-- Current Week Row -->
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <h3
-                            class="text-sm font-black uppercase tracking-widest text-theme-secondary text-modal-week-title">
-                            Week 1 (Jan 19 - Jan 25)</h3>
+                        <h3 id="current-week-title"
+                            class="text-sm font-black uppercase tracking-widest text-theme-secondary">
+                            Loading Week...</h3>
                         <span id="modal-points-text"
                             class="text-xs font-black bg-theme-accent px-2 py-0.5 border-2 border-black shadow-[2px_2px_0_#000]">0
                             Points</span>
@@ -258,43 +245,24 @@
                                 class="text-xs font-black uppercase tracking-tighter mix-blend-difference text-white">0%</span>
                         </div>
                     </div>
-                    <p id="modal-motivational-text" class="text-[11px] font-bold text-theme-muted italic">"Start your
-                        engines, let's get some applications in!"</p>
                 </div>
 
-                <!-- Example Week Row 2 -->
-                <div class="space-y-3 opacity-60">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-black uppercase tracking-widest text-theme-secondary">Week 0 (Jan 12 -
-                            Jan 18)</h3>
-                        <span class="text-xs font-black bg-white border-2 border-black shadow-[2px_2px_0_#000]">320
-                            Points</span>
-                    </div>
-                    <div class="relative w-full h-8 bg-black border-4 border-black">
-                        <div
-                            class="absolute inset-0 bg-emerald-400 w-[100%] border-r-0 flex items-center justify-center">
-                            <span class="text-xs font-black uppercase tracking-tighter text-black">Goal Met! 100%</span>
-                        </div>
-                    </div>
+                <div id="scoreboard-history" class="space-y-6">
+                    <!-- Historical weeks will be injected here -->
                 </div>
 
-                <!-- Lore Ipsum Filler Box -->
-                <div class="p-4 bg-theme-column border-4 border-black border-dashed">
-                    <h4 class="text-xs font-black uppercase mb-2">Weekly Summary</h4>
-                    <p class="text-xs leading-relaxed text-theme-secondary">
-                        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Satius est enim ad statum naturae
-                        conquiescere.
-                        Duo Reges: constructio interrete. Quid ad utilitatem tantae pecuniae? Tu quidem reddes;
-                    </p>
+                <!-- Score Control Slider (Manual Progress Adjuster) -->
+                <div class="mt-8 p-4 bg-black/5 border-2 border-dashed border-black/10 rounded-lg space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-[10px] font-black uppercase tracking-widest text-theme-muted">Manual Progress
+                            Adjuster</label>
+                        <span id="score-slider-val" class="text-sm font-black font-mono">0%</span>
+                    </div>
+                    <input type="range" id="score-slider" min="0" max="150" value="0"
+                        class="w-full h-2 bg-theme-border appearance-none cursor-pointer rounded-full accent-theme-accent focus:outline-none">
                 </div>
             </div>
-            <footer class="modal-footer p-4 border-t sticky bottom-0 z-10 flex justify-between items-center">
-                <span class="text-[10px] font-black uppercase text-theme-muted">Season 1: The Hunt</span>
-                <div class="flex gap-2">
-                    <div class="w-3 h-3 bg-theme-accent border-2 border-black"></div>
-                    <div class="w-3 h-3 bg-emerald-400 border-2 border-black"></div>
-                    <div class="w-3 h-3 bg-rose-500 border-2 border-black"></div>
-                </div>
+            <footer class="modal-footer p-4 border-t sticky bottom-0 z-10 flex justify-end items-center">
             </footer>
         </div>
     </div>
