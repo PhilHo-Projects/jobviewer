@@ -197,6 +197,28 @@ app.patch(`${BASE_PATH}/api/jobs/:id`, (req, res) => {
   res.json(next);
 });
 
+app.patch(`${BASE_PATH}/api/jobs/bulk-move`, (req, res) => {
+  const { from, to } = req.body;
+  if (!from || !to) {
+    return res.status(400).json({ error: 'Source (from) and target (to) statuses are required' });
+  }
+
+  let count = 0;
+  const nextJobs = (latestJobs || []).map(j => {
+    if (j.status === from) {
+      count++;
+      return { ...j, status: to };
+    }
+    return j;
+  });
+
+  if (count > 0) {
+    latestJobs = nextJobs;
+    saveJobsToDisk(latestJobs);
+  }
+  res.json({ moved: count, from, to });
+});
+
 app.delete(`${BASE_PATH}/api/jobs/status/:status`, (req, res) => {
   const { status } = req.params;
   const beforeCount = (latestJobs || []).length;

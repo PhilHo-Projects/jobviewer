@@ -30,10 +30,17 @@ const els = {
     scoreSliderVal: null,
     scorePercentPrecise: null,
     countdownClock: null,
+    countdownBarFill: null,
+    scoreBarFill: null,
     modalPointsText: null,
     modalProgressFill: null,
     modalProgressPercent: null,
-    modalMotivationalText: null
+    modalMotivationalText: null,
+    confirmBackdrop: null,
+    confirmTitle: null,
+    confirmMessage: null,
+    confirmProceed: null,
+    confirmCancel: null
 };
 
 
@@ -800,6 +807,11 @@ function updateScoreboardUI(percent) {
         els.scorePercentPrecise.textContent = `${p.toFixed(2)}%`;
     }
 
+    // Update Mobile Score Bar
+    if (els.scoreBarFill) {
+        els.scoreBarFill.style.height = `${Math.min(p, 100)}%`;
+    }
+
     // Update Modal Progress Bar
     if (els.modalProgressFill) {
         // Handle overflow (>100%) by capping width at 100% 
@@ -879,6 +891,14 @@ function startCountdown() {
         if (els.countdownClock) {
             els.countdownClock.textContent =
                 `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        // Update Mobile Countdown Bar (Progress through the week)
+        if (els.countdownBarFill) {
+            const weekMs = 7 * 24 * 60 * 60 * 1000;
+            // Percent of week PASSED
+            const passed = Math.max(0, Math.min(100, (1 - (diff / weekMs)) * 100));
+            els.countdownBarFill.style.height = `${passed}%`;
         }
     }
     update();
@@ -963,6 +983,65 @@ function closeScoreboard() {
     }
 }
 
+let onConfirmProceed = null;
+
+function openConfirm(title, message, onProceed) {
+    if (els.confirmTitle) els.confirmTitle.textContent = title;
+    if (els.confirmMessage) els.confirmMessage.textContent = message;
+    onConfirmProceed = onProceed;
+
+    if (els.confirmBackdrop) {
+        els.confirmBackdrop.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            els.confirmBackdrop.classList.remove('opacity-0');
+            const doc = els.confirmBackdrop.querySelector('[role="document"]');
+            if (doc) doc.classList.remove('scale-95');
+        });
+    }
+}
+
+function closeConfirm() {
+    onConfirmProceed = null;
+    if (els.confirmBackdrop) {
+        els.confirmBackdrop.classList.add('opacity-0');
+        const doc = els.confirmBackdrop.querySelector('[role="document"]');
+        if (doc) doc.classList.add('scale-95');
+        setTimeout(() => {
+            if (els.confirmBackdrop.classList.contains('opacity-0')) {
+                els.confirmBackdrop.classList.add('hidden');
+            }
+        }, 200);
+    }
+}
+
+async function executeBulkMove(from, to) {
+    setStatus(`Moving all ${from} jobs to ${to}...`);
+    try {
+        const res = await fetch(`${API_BASE}/bulk-move`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from, to })
+        });
+        if (!res.ok) throw new Error('Bulk move failed');
+        const data = await res.json();
+
+        // Update local jobs array
+        jobs = jobs.map(j => {
+            if (j.status === from) {
+                return { ...j, status: to };
+            }
+            return j;
+        });
+
+        renderBoard();
+        setStatus(`Moved ${data.moved} jobs to bin`);
+        closeConfirm();
+    } catch (e) {
+        console.error(e);
+        setStatus('Failed to move jobs');
+    }
+}
+
 function init() {
 
 
@@ -989,15 +1068,47 @@ function init() {
     els.scoreSliderVal = $('score-slider-val');
     els.scorePercentPrecise = $('score-percent-precise');
     els.countdownClock = $('countdown-clock');
+    els.countdownBarFill = $('countdown-bar-fill');
+    els.scoreBarFill = $('score-bar-fill');
     els.modalPointsText = $('modal-points-text');
     els.modalProgressFill = $('modal-progress-fill');
     els.modalProgressPercent = $('modal-progress-percent');
     els.modalMotivationalText = $('modal-motivational-text');
+    els.confirmBackdrop = $('confirm-backdrop');
+    els.confirmTitle = $('confirm-title');
+    els.confirmMessage = $('confirm-message');
+    els.confirmProceed = $('confirm-proceed');
+    els.confirmCancel = $('confirm-cancel');
 
     if (els.refreshBtn) els.refreshBtn.addEventListener('click', fetchJobs);
     if (els.addBtn) els.addBtn.addEventListener('click', openAddModal);
     if (els.binBtn) els.binBtn.addEventListener('click', openBin);
     if (els.scoreboardBtn) els.scoreboardBtn.addEventListener('click', openScoreboard);
+
+    if (els.newCount) {
+        els.newCount.addEventListener('click', () => {
+            const count = parseInt(els.newCount.textContent);
+            if (count > 0) {
+                openConfirm(
+                    'Dumping New Jobs?',
+                    `Are you sure you want to move all ${count} NEW jobs into the recycling bin?`,
+                    () => executeBulkMove('new', 'deleted')
+                );
+            }
+        });
+    }
+
+    if (els.confirmCancel) els.confirmCancel.addEventListener('click', closeConfirm);
+    if (els.confirmProceed) {
+        els.confirmProceed.addEventListener('click', () => {
+            if (onConfirmProceed) onConfirmProceed();
+        });
+    }
+    if (els.confirmBackdrop) {
+        els.confirmBackdrop.addEventListener('click', (e) => {
+            if (e.target === els.confirmBackdrop) closeConfirm();
+        });
+    }
 
     if (els.scoreSlider) {
         els.scoreSlider.addEventListener('input', (e) => {

@@ -15,13 +15,25 @@
 <body class="min-h-screen">
     <header class="sticky top-0 z-50">
         <div class="max-w-[1400px] mx-auto px-4 py-4 md:px-6">
-            <div class="flex items-center justify-between gap-4">
-                <h1 class="text-xl font-bold tracking-tight text-theme-primary">Job Viewer</h1>
+            <div class="flex items-center justify-between gap-2 relative">
+                <h1
+                    class="text-sm md:text-xl font-black tracking-tight text-theme-primary uppercase flex flex-col md:flex-row md:gap-1.5 leading-[0.9] md:leading-normal">
+                    <span>Job</span>
+                    <span>Viewer</span>
+                </h1>
 
                 <!-- Stress Center -->
-                <div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-6">
-                    <!-- Countdown Clock -->
-                    <div class="flex flex-col items-end w-[130px]">
+                <div class="flex items-center gap-3 md:gap-6 md:absolute md:left-1/2 md:-translate-x-1/2">
+                    <!-- Countdown Bar (Left) - Mobile Only -->
+                    <div class="md:hidden w-3 bg-black/10 border-2 border-black h-14 relative overflow-hidden group"
+                        title="Time Passed This Week">
+                        <div id="countdown-bar-fill"
+                            class="absolute bottom-0 left-0 w-full bg-rose-500 transition-all duration-1000"
+                            style="height: 0%"></div>
+                    </div>
+
+                    <!-- Countdown Clock (Desktop) -->
+                    <div class="hidden md:flex flex-col items-end w-[130px]">
                         <div id="countdown-clock"
                             class="text-xl font-bold font-mono text-rose-500 tabular-nums leading-none">
                             00:00:00
@@ -34,8 +46,16 @@
                         style="background: conic-gradient(#ef4444 0%, #e5e5e5 0%)">
                     </button>
 
-                    <!-- Precise Percentage -->
-                    <div class="flex flex-col items-start w-[130px]">
+                    <!-- Score Bar (Right) - Mobile Only -->
+                    <div class="md:hidden w-3 bg-black/10 border-2 border-black h-14 relative overflow-hidden group"
+                        title="Job Progress">
+                        <div id="score-bar-fill"
+                            class="absolute bottom-0 left-0 w-full bg-theme-accent transition-all duration-300"
+                            style="height: 0%"></div>
+                    </div>
+
+                    <!-- Precise Percentage (Desktop) -->
+                    <div class="hidden md:flex flex-col items-start w-[130px]">
                         <div id="score-percent-precise"
                             class="text-xl font-bold font-digital text-black leading-none tracking-tighter tabular-nums">
                             00.00%
@@ -44,7 +64,7 @@
                 </div>
 
                 <div class="flex items-center gap-2">
-                    <div id="statusText" class="text-xs text-theme-muted font-medium mr-2"></div>
+                    <div id="statusText" class="hidden sm:block text-xs text-theme-muted font-medium mr-2"></div>
                     <button id="add-job" type="button" title="Add Manual Job"
                         class="btn-accent inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
@@ -86,8 +106,8 @@
                         <span class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span>
                         <h2 class="text-sm font-bold text-theme-primary uppercase tracking-wider">New</h2>
                     </div>
-                    <span id="count-new"
-                        class="px-2 py-0.5 rounded-full bg-theme-button text-theme-muted text-[11px] font-bold">0</span>
+                    <button id="count-new" type="button" title="Click to move all NEW jobs to Bin"
+                        class="px-2 py-0.5 rounded-full bg-theme-button text-theme-muted text-[11px] font-bold hover:bg-rose-500 hover:text-white transition-all cursor-pointer active:scale-95 border-2 border-black/10 hover:border-black shadow-sm">0</button>
                 </div>
                 <div id="zone-new"
                     class="dropzone flex-1 min-h-[60vh] md:min-h-[70vh] p-3 space-y-3 overflow-y-auto transition-colors"
@@ -264,6 +284,38 @@
             </div>
             <footer class="modal-footer p-4 border-t sticky bottom-0 z-10 flex justify-end items-center">
             </footer>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-backdrop"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 hidden opacity-0 transition-opacity duration-200"
+        role="dialog" aria-modal="true">
+        <div class="modal-container w-full max-w-sm flex flex-col scale-95 transition-transform duration-200 overflow-hidden"
+            role="document">
+            <div class="p-6 text-center space-y-6">
+                <div
+                    class="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto border-4 border-rose-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </div>
+                <div class="space-y-2">
+                    <h3 id="confirm-title" class="text-xl font-black uppercase tracking-tighter text-theme-primary">Are
+                        you sure?</h3>
+                    <p id="confirm-message" class="text-xs text-theme-secondary font-bold px-4 leading-tight">This will
+                        move all jobs in this column to the recycle bin.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                    <button id="confirm-cancel" type="button"
+                        class="btn-icon py-3 text-[10px] font-black uppercase tracking-widest border-2">Cancel</button>
+                    <button id="confirm-proceed" type="button"
+                        class="btn-accent bg-rose-500 hover:bg-rose-600 text-white py-3 text-[10px] font-black uppercase tracking-widest border-2">Move
+                        to Bin</button>
+                </div>
+            </div>
         </div>
     </div>
 
