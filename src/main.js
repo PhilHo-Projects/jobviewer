@@ -118,6 +118,13 @@ function groupJobs() {
 function renderBoard() {
     const grouped = groupJobs();
 
+    // Sort "new" column newest-first by scrapedDate
+    grouped.new.sort((a, b) => {
+        const da = a.scrapedDate ? new Date(a.scrapedDate).getTime() : 0;
+        const db = b.scrapedDate ? new Date(b.scrapedDate).getTime() : 0;
+        return db - da;
+    });
+
     if (els.newCount) els.newCount.textContent = grouped.new.length;
     if (els.inProgressCount) els.inProgressCount.textContent = grouped.in_progress.length;
     if (els.completedCount) els.completedCount.textContent = grouped.completed.length;
@@ -1017,7 +1024,7 @@ function closeConfirm() {
 async function executeBulkMove(from, to) {
     setStatus(`Moving all ${from} jobs to ${to}...`);
     try {
-        const res = await fetch(`${API_BASE}/bulk-move`, {
+        const res = await fetch(`${API_BASE}/jobs/bulk-move`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ from, to })
