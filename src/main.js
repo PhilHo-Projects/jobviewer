@@ -1,4 +1,8 @@
 import './input.css';
+import { jsPDF } from 'jspdf';
+import templateEfficiencyRaw from './templates/efficiency.txt?raw';
+import templateTwoRaw from './templates/two.txt?raw';
+import templateThreeRaw from './templates/three.txt?raw';
 
 const API_BASE = '/job-viewer/api';
 
@@ -26,21 +30,23 @@ const els = {
     binBtn: null,
     scoreboardBtn: null,
     scoreboardBackdrop: null,
-    scoreSlider: null,
-    scoreSliderVal: null,
-    scorePercentPrecise: null,
-    countdownClock: null,
-    countdownBarFill: null,
-    scoreBarFill: null,
+    sprintPointsText: null,
+    sprintProgressBar: null,
     modalPointsText: null,
     modalProgressFill: null,
-    modalProgressPercent: null,
-    modalMotivationalText: null,
+    currentWeekWins: null,
     confirmBackdrop: null,
     confirmTitle: null,
     confirmMessage: null,
-    confirmProceed: null,
-    confirmCancel: null
+    coverLetterBackdrop: null,
+    coverLetterClose: null,
+    coverLetterContent: null,
+    coverLetterDownload: null,
+    coverLetterSubtitle: null,
+    modalCoverLetter: null,
+    btnTemplateEfficiency: null,
+    btnTemplateSecond: null,
+    btnTemplateThird: null
 };
 
 
@@ -680,6 +686,193 @@ function wireModal() {
 
     const saveBtn = $('modal-save');
     if (saveBtn) saveBtn.addEventListener('click', saveModal);
+
+    const clClose = $('cover-letter-close');
+    if (clClose) clClose.addEventListener('click', closeCoverLetterModal);
+
+    const clDownload = $('cover-letter-download');
+    if (clDownload) clDownload.addEventListener('click', downloadCoverLetterPDF);
+
+    els.modalCoverLetter = $('modal-cover-letter');
+    if (els.modalCoverLetter) els.modalCoverLetter.addEventListener('click', () => {
+        if (activeJobId) {
+            openCoverLetterModal(activeJobId);
+        }
+    });
+
+    els.btnTemplateEfficiency = $('btn-template-efficiency');
+    els.btnTemplateSecond = $('btn-template-second');
+    els.btnTemplateThird = $('btn-template-third');
+
+    if (els.btnTemplateEfficiency) els.btnTemplateEfficiency.addEventListener('click', () => setCoverLetterTemplate('efficiency'));
+    if (els.btnTemplateSecond) els.btnTemplateSecond.addEventListener('click', () => setCoverLetterTemplate('two'));
+    if (els.btnTemplateThird) els.btnTemplateThird.addEventListener('click', () => setCoverLetterTemplate('three'));
+
+    els.coverLetterBackdrop = $('cover-letter-backdrop');
+    els.coverLetterContent = $('cover-letter-content');
+    els.coverLetterSubtitle = $('cover-letter-subtitle');
+}
+
+function setCoverLetterTemplate(type) {
+    if (!activeJobId || !els.coverLetterContent) return;
+    const job = jobs.find(j => String(j.id) === String(activeJobId));
+    if (!job) return;
+
+    // Reset button styles
+    [els.btnTemplateEfficiency, els.btnTemplateSecond, els.btnTemplateThird].forEach(btn => {
+        if (!btn) return;
+        btn.classList.remove('bg-theme-accent', 'text-black');
+        btn.classList.add('bg-gray-200', 'text-black');
+    });
+
+    const title = escapeHtml(job.title || '[Job Title]');
+    const company = escapeHtml(job.company || '[Company Name]');
+    const highlightedTitle = `<span class="bg-yellow-300 text-black px-1 font-bold border-b-2 border-black">${title}</span>`;
+    const highlightedCompany = `<span class="bg-yellow-300 text-black px-1 font-bold border-b-2 border-black">${company}</span>`;
+
+    let templateHtml = '';
+
+    if (type === 'efficiency') {
+        if (els.btnTemplateEfficiency) {
+            els.btnTemplateEfficiency.classList.add('bg-theme-accent', 'text-black');
+            els.btnTemplateEfficiency.classList.remove('bg-gray-200', 'text-white');
+        }
+        templateHtml = templateEfficiencyRaw;
+    } else if (type === 'two') {
+        if (els.btnTemplateSecond) {
+            els.btnTemplateSecond.classList.add('bg-theme-accent', 'text-black');
+            els.btnTemplateSecond.classList.remove('bg-gray-200', 'text-white');
+        }
+        templateHtml = templateTwoRaw;
+    } else if (type === 'three') {
+        if (els.btnTemplateThird) {
+            els.btnTemplateThird.classList.add('bg-theme-accent', 'text-black');
+            els.btnTemplateThird.classList.remove('bg-gray-200', 'text-white');
+        }
+        templateHtml = templateThreeRaw;
+    }
+
+    templateHtml = templateHtml
+        .replaceAll('{{title}}', highlightedTitle)
+        .replaceAll('{{company}}', highlightedCompany);
+
+    els.coverLetterContent.innerHTML = templateHtml;
+}
+
+function openCoverLetterModal(jobId) {
+    const job = jobs.find(j => String(j.id) === String(jobId));
+    if (!job) return;
+
+    activeJobId = jobId;
+
+    const title = job.title || '[Job Title]';
+    const company = job.company || '[Company Name]';
+
+    if (els.coverLetterSubtitle) {
+        els.coverLetterSubtitle.textContent = `Generating for ${company}: ${title}`;
+    }
+
+    setCoverLetterTemplate('efficiency');
+
+    if (els.coverLetterBackdrop) {
+        els.coverLetterBackdrop.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            els.coverLetterBackdrop.classList.remove('opacity-0');
+            const doc = els.coverLetterBackdrop.querySelector('[role="document"]');
+            if (doc) doc.classList.remove('scale-95');
+        });
+    }
+}
+
+function closeCoverLetterModal() {
+    activeJobId = null;
+    if (els.coverLetterBackdrop) {
+        els.coverLetterBackdrop.classList.add('opacity-0');
+        const doc = els.coverLetterBackdrop.querySelector('[role="document"]');
+        if (doc) doc.classList.add('scale-95');
+
+        setTimeout(() => {
+            if (els.coverLetterBackdrop.classList.contains('opacity-0')) {
+                els.coverLetterBackdrop.classList.add('hidden');
+            }
+        }, 200);
+    }
+}
+
+function downloadCoverLetterPDF() {
+    if (!els.coverLetterContent) return;
+
+    // Use innerText to get clean text without HTML span tags for the highlight!
+    const text = els.coverLetterContent.innerText;
+    if (!text || text.trim() === '') {
+        alert("The cover letter is empty!");
+        return;
+    }
+
+    const job = jobs.find(j => String(j.id) === String(activeJobId));
+    const company = job ? (job.company || 'Company') : 'Company';
+
+    try {
+        const doc = new jsPDF();
+        const margin = 25.4; // 1-inch margins
+        const pageHeight = doc.internal.pageSize.height;
+        const pageWidth = doc.internal.pageSize.width;
+        const maxLineWidth = pageWidth - margin * 2;
+        const lineHeight = 6.5;
+
+        // Use standard professional sans-serif font (closest base PDF font to Calibri)
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+
+        const splitText = doc.splitTextToSize(text, maxLineWidth);
+
+        let y = margin;
+        for (let i = 0; i < splitText.length; i++) {
+            if (y > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+            }
+
+            const line = splitText[i];
+
+            if (line === "philippeho.popnux.com") {
+                const fontSize = doc.internal.getFontSize();
+                const scale = doc.internal.scaleFactor;
+                doc.setTextColor(0, 102, 204); // subtle blue
+                doc.text(line, margin, y);
+                doc.link(margin, y - fontSize + 3, doc.getStringUnitWidth(line) * fontSize / scale, fontSize, { url: "https://philippeho.popnux.com" });
+                doc.setTextColor(0, 0, 0); // reset
+            } else if (line === "linkedin.com/in/philippe-ho-03") {
+                const fontSize = doc.internal.getFontSize();
+                const scale = doc.internal.scaleFactor;
+                doc.setTextColor(0, 102, 204); // subtle blue
+                doc.text(line, margin, y);
+                doc.link(margin, y - fontSize + 3, doc.getStringUnitWidth(line) * fontSize / scale, fontSize, { url: "https://www.linkedin.com/in/philippe-ho-03" });
+                doc.setTextColor(0, 0, 0); // reset  
+            } else if (line.startsWith("Subject:")) {
+                // Bold the subject line
+                doc.setFont("helvetica", "bold");
+                doc.text(line, margin, y);
+                doc.setFont("helvetica", "normal");
+            } else if (line === "Philippe Ho" && i > splitText.length - 5) {
+                // Bold the name at the bottom
+                doc.setFont("helvetica", "bold");
+                doc.text(line, margin, y);
+                doc.setFont("helvetica", "normal");
+            } else {
+                // Normal text
+                doc.text(line, margin, y);
+            }
+
+            y += lineHeight;
+        }
+
+        const safeCompany = company.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        doc.save(`Philippe_Ho_Cover_Letter_${safeCompany}.pdf`);
+    } catch (e) {
+        console.error("PDF generation failed", e);
+        alert("Failed to export PDF: " + e.message);
+    }
 }
 
 function openAddModal() {
@@ -788,8 +981,10 @@ function getCurrentWeekRange() {
     return `${fmt(last)} - ${fmt(new Date(next.getTime() - 1))}`;
 }
 
-function updateScoreboardUI(percent) {
-    const p = parseFloat(percent);
+function updateScoreboardUI(points, wins) {
+    const goal = 10;
+    const isGoalMet = points >= goal;
+    const progressPercent = Math.min((points / goal) * 100, 100);
 
     // Update Week Title
     const weekTitleEl = $('current-week-title');
@@ -797,119 +992,65 @@ function updateScoreboardUI(percent) {
         weekTitleEl.textContent = `Current Week (${getCurrentWeekRange()})`;
     }
 
-    // Update Slider UI
-    if (els.scoreSlider) els.scoreSlider.value = p;
-    if (els.scoreSliderVal) els.scoreSliderVal.textContent = `${Math.round(p)}%`;
+    const color = isGoalMet ? 'var(--color-emerald-400, #34d399)' : 'var(--color-theme-accent, #facc15)';
 
-    // Simplify Color Logic: Use theme-accent for the fill
-    const color = 'var(--color-theme-accent, #facc15)';
-
-    // Update Header Pizza Pie
-    if (els.scoreboardBtn) {
-        // Handle overflow (>100%) by keeping it full color
-        const piePercent = Math.min(p, 100);
-        els.scoreboardBtn.style.background = `conic-gradient(${color} ${piePercent}%, #e5e5e5 ${piePercent}%)`;
-    }
-    if (els.scorePercentPrecise) {
-        els.scorePercentPrecise.textContent = `${p.toFixed(2)}%`;
+    // Update Top Gamification Bar
+    if (els.sprintPointsText) {
+        els.sprintPointsText.textContent = `${points} / ${goal}`;
+        if (isGoalMet) {
+            els.sprintPointsText.classList.replace('text-theme-primary', 'text-emerald-600');
+        } else {
+            els.sprintPointsText.classList.replace('text-emerald-600', 'text-theme-primary');
+        }
     }
 
-    // Update Mobile Score Bar
-    if (els.scoreBarFill) {
-        els.scoreBarFill.style.height = `${Math.min(p, 100)}%`;
+    if (els.sprintProgressBar) {
+        els.sprintProgressBar.style.width = `${progressPercent}%`;
+        els.sprintProgressBar.style.backgroundColor = color;
     }
 
     // Update Modal Progress Bar
     if (els.modalProgressFill) {
-        // Handle overflow (>100%) by capping width at 100% 
-        // but the label will still show the true percentage
-        const flowPercent = Math.min(p, 100);
-        els.modalProgressFill.style.width = `${flowPercent}%`;
+        els.modalProgressFill.style.width = `${progressPercent}%`;
         els.modalProgressFill.style.backgroundColor = color;
     }
-    if (els.modalProgressPercent) {
-        els.modalProgressPercent.textContent = `${Math.round(p)}%`;
-        // Change text color for better readability if background is too bright/dark
-        els.modalProgressPercent.style.color = 'black';
-    }
     if (els.modalPointsText) {
-        // 10 points per 10% (1 point per application if goal is 10)
-        // Actually let's make it 100 points per 100% (10 points per app)
-        els.modalPointsText.textContent = `${Math.round(p)} Points`;
+        els.modalPointsText.textContent = isGoalMet ? `GOAL MET: ${points} Points` : `${points} / ${goal} Goals`;
+        if (isGoalMet) els.modalPointsText.style.backgroundColor = color;
+    }
+
+    // Inject the "Wins"
+    if (els.currentWeekWins) {
+        if (wins.length === 0) {
+            els.currentWeekWins.innerHTML = `<div class="text-[10px] text-theme-muted italic">No momentum yet this week... get to applying!</div>`;
+        } else {
+            els.currentWeekWins.innerHTML = wins.map(w => {
+                const s = w.status === 'completed' ? 'Closure Reached!' : 'Application Sent';
+                return `<div class="text-xs font-bold font-mono text-black border-l-2 border-theme-accent pl-2">+1 ${escapeHtml(w.company)}: ${escapeHtml(w.title)} <span class="text-[9px] text-theme-muted opacity-80 uppercase ml-1">(${s})</span></div>`;
+            }).join('');
+        }
     }
 }
 
 function calculateAndRefreshScore() {
     const lastReset = getLastReset();
 
-    // Filter jobs moved out of 'new' this week
-    const currentWeekJobs = jobs.filter(j => {
-        if (!j.appliedDate) return false;
-        if (j.status === 'new' || j.status === 'deleted') return false;
-        const appDate = new Date(j.appliedDate);
-        return appDate >= lastReset;
+    // Reframe what a "win" is for points: 
+    // +1 if it moved this week to in_progress (grind)
+    // +1 if it moved this week to completed (closure)
+    const wins = jobs.filter(j => {
+        if (j.status !== 'in_progress' && j.status !== 'completed') return false;
+
+        // When was it updated to this goal? Either statusSummaryUpdatedAt (reliable) or appliedDate (fallback) or scrapedDate
+        const timeVal = j.statusSummaryUpdatedAt || j.appliedDate || j.scrapedDate;
+        if (!timeVal) return false;
+
+        const d = new Date(timeVal);
+        return d >= lastReset;
     });
 
-    const percent = currentWeekJobs.length * 10;
-    updateScoreboardUI(percent);
-
-    // Update current week list preview (optional but cool)
-    const container = $('scoreboard-history');
-    // We'll keep the current week's list separate or just focus on history below
-}
-
-function startCountdown() {
-    function getNextReset() {
-        const now = new Date();
-        const nextReset = new Date(now);
-
-        // Target Monday (1)
-        const day = now.getDay();
-        const daysUntilMonday = (day === 0) ? 1 : (8 - day);
-
-        nextReset.setDate(now.getDate() + daysUntilMonday);
-        nextReset.setHours(5, 0, 0, 0);
-
-        // If today is Monday and it's before 5am, the reset is today
-        if (day === 1 && now.getHours() < 5) {
-            nextReset.setDate(now.getDate());
-        } else if (day === 1 && now.getHours() >= 5) {
-            // Already past 5am Monday, next reset is next week
-            nextReset.setDate(now.getDate() + 7);
-        }
-
-        return nextReset;
-    }
-
-    function update() {
-        const now = new Date();
-        const nextReset = getNextReset();
-
-        const diff = nextReset - now;
-        if (diff <= 0) {
-            if (els.countdownClock) els.countdownClock.textContent = "00:00:00";
-            return;
-        }
-
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const mins = Math.floor((diff / 1000 / 60) % 60);
-        const secs = Math.floor((diff / 1000) % 60);
-
-        if (els.countdownClock) {
-            els.countdownClock.textContent =
-                `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-        }
-
-        // Update Mobile Countdown Bar (Progress through the week)
-        if (els.countdownBarFill) {
-            const weekMs = 7 * 24 * 60 * 60 * 1000;
-            // Percent of week PASSED
-            const passed = Math.max(0, Math.min(100, (1 - (diff / weekMs)) * 100));
-            els.countdownBarFill.style.height = `${passed}%`;
-        }
-    }
-    update();
-    setInterval(update, 1000);
+    const points = wins.length;
+    updateScoreboardUI(points, wins);
 }
 
 async function fetchHistory() {
@@ -1071,16 +1212,11 @@ function init() {
     els.binBtn = $('view-bin');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
-    els.scoreSlider = $('score-slider');
-    els.scoreSliderVal = $('score-slider-val');
-    els.scorePercentPrecise = $('score-percent-precise');
-    els.countdownClock = $('countdown-clock');
-    els.countdownBarFill = $('countdown-bar-fill');
-    els.scoreBarFill = $('score-bar-fill');
+    els.sprintPointsText = $('sprint-points-text');
+    els.sprintProgressBar = $('sprint-progress-bar');
     els.modalPointsText = $('modal-points-text');
     els.modalProgressFill = $('modal-progress-fill');
-    els.modalProgressPercent = $('modal-progress-percent');
-    els.modalMotivationalText = $('modal-motivational-text');
+    els.currentWeekWins = $('current-week-wins');
     els.confirmBackdrop = $('confirm-backdrop');
     els.confirmTitle = $('confirm-title');
     els.confirmMessage = $('confirm-message');
@@ -1117,12 +1253,6 @@ function init() {
         });
     }
 
-    if (els.scoreSlider) {
-        els.scoreSlider.addEventListener('input', (e) => {
-            updateScoreboardUI(e.target.value);
-        });
-    }
-
     const binClose = $('bin-close');
     if (binClose) binClose.addEventListener('click', closeBin);
 
@@ -1149,9 +1279,6 @@ function init() {
 
     // Init UI with calculated progress
     calculateAndRefreshScore();
-
-    // Start Stress Countdown
-    startCountdown();
 
     fetchJobs();
 }

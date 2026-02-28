@@ -22,46 +22,20 @@
                     <span>Viewer</span>
                 </h1>
 
-                <!-- Stress Center -->
-                <div class="flex items-center gap-3 md:gap-6 md:absolute md:left-1/2 md:-translate-x-1/2">
-                    <!-- Countdown Bar (Left) - Mobile Only -->
-                    <div class="md:hidden w-3 bg-black/10 border-2 border-black h-14 relative overflow-hidden group"
-                        title="Time Passed This Week">
-                        <div id="countdown-bar-fill"
-                            class="absolute bottom-0 left-0 w-full bg-rose-500 transition-all duration-1000"
-                            style="height: 0%"></div>
+                <!-- Gamification Center -->
+                <button id="view-scoreboard" type="button" aria-label="View Progress Tracker" title="View Progress"
+                    class="flex flex-col items-center gap-1 md:absolute md:left-1/2 md:-translate-x-1/2 cursor-pointer group hover:bg-black/5 p-2 rounded-lg transition-colors border-2 border-transparent">
+                    <div
+                        class="text-[10px] md:text-xs font-black uppercase tracking-widest text-theme-muted group-hover:text-theme-primary transition-colors flex gap-2">
+                        Weekly Sprint <span id="sprint-points-text" class="text-theme-primary">0 / 10</span>
                     </div>
-
-                    <!-- Countdown Clock (Desktop) -->
-                    <div class="hidden md:flex flex-col items-end w-[130px]">
-                        <div id="countdown-clock"
-                            class="text-xl font-bold font-mono text-rose-500 tabular-nums leading-none">
-                            00:00:00
-                        </div>
+                    <div
+                        class="w-24 md:w-32 h-3 md:h-4 bg-white border-2 border-black shadow-[2px_2px_0_#000] overflow-hidden group-active:translate-x-0.5 group-active:translate-y-0.5 group-active:shadow-none transition-all">
+                        <div id="sprint-progress-bar"
+                            class="h-full bg-theme-accent border-r-2 border-black transition-all duration-300"
+                            style="width: 0%"></div>
                     </div>
-
-                    <!-- Pizza Pie Wheel -->
-                    <button id="view-scoreboard" type="button" title="View Scoreboard"
-                        class="w-14 h-14 rounded-full border-4 border-black shadow-[4px_4px_0_#000] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all relative overflow-hidden bg-[#e5e5e5] flex-shrink-0"
-                        style="background: conic-gradient(#ef4444 0%, #e5e5e5 0%)">
-                    </button>
-
-                    <!-- Score Bar (Right) - Mobile Only -->
-                    <div class="md:hidden w-3 bg-black/10 border-2 border-black h-14 relative overflow-hidden group"
-                        title="Job Progress">
-                        <div id="score-bar-fill"
-                            class="absolute bottom-0 left-0 w-full bg-theme-accent transition-all duration-300"
-                            style="height: 0%"></div>
-                    </div>
-
-                    <!-- Precise Percentage (Desktop) -->
-                    <div class="hidden md:flex flex-col items-start w-[130px]">
-                        <div id="score-percent-precise"
-                            class="text-xl font-bold font-digital text-black leading-none tracking-tighter tabular-nums">
-                            00.00%
-                        </div>
-                    </div>
-                </div>
+                </button>
 
                 <div class="flex items-center gap-2">
                     <div id="statusText" class="hidden sm:block text-xs text-theme-muted font-medium mr-2"></div>
@@ -166,11 +140,16 @@
                 </button>
             </header>
             <div id="modal-body" class="p-6 overflow-y-auto flex-1"></div>
-            <footer class="modal-footer p-4 border-t flex items-center justify-between sticky bottom-0 z-10">
+            <footer
+                class="modal-footer p-4 border-t-4 border-black flex flex-wrap items-center justify-between sticky bottom-0 z-10 bg-gray-50">
                 <div id="modal-error" class="text-xs font-bold text-rose-500 px-2 hidden"></div>
                 <div class="flex gap-3 ml-auto">
+                    <button id="modal-cover-letter" type="button"
+                        class="btn-accent bg-theme-accent text-black border-2 border-black shadow-[4px_4px_0_#000] inline-flex items-center justify-center text-xs md:text-sm font-black px-4 md:px-6 py-2 transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none uppercase tracking-widest">
+                        Generate Cover Letter
+                    </button>
                     <button id="modal-save" type="button"
-                        class="btn-accent inline-flex items-center justify-center text-sm font-semibold px-6 py-2 transition-all active:scale-95">
+                        class="btn-accent bg-emerald-400 text-black border-2 border-black shadow-[4px_4px_0_#000] inline-flex items-center justify-center text-xs md:text-sm font-black px-4 md:px-6 py-2 transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none uppercase tracking-widest">
                         Save Changes
                     </button>
                 </div>
@@ -247,39 +226,33 @@
                     </svg>
                 </button>
             </header>
-            <div id="scoreboard-body" class="p-6 overflow-y-auto flex-1 space-y-8">
+            <div id="scoreboard-body" class="p-6 overflow-y-auto flex-1 space-y-8 bg-gray-50">
                 <!-- Current Week Row -->
-                <div class="space-y-3">
-                    <div class="flex items-center justify-between">
+                <div class="bg-white p-4 border-4 border-black shadow-[4px_4px_0_#000] flex flex-col gap-4">
+                    <div class="flex items-center justify-between border-b-2 border-gray-200 pb-2">
                         <h3 id="current-week-title"
-                            class="text-sm font-black uppercase tracking-widest text-theme-secondary">
-                            Loading Week...</h3>
+                            class="text-sm font-black uppercase tracking-widest text-theme-primary">Current Week</h3>
                         <span id="modal-points-text"
-                            class="text-xs font-black bg-theme-accent px-2 py-0.5 border-2 border-black shadow-[2px_2px_0_#000]">0
-                            Points</span>
+                            class="text-xs font-black bg-theme-accent px-3 py-1 border-2 border-black">0 / 10
+                            Goals</span>
                     </div>
-                    <div class="relative w-full h-8 bg-black border-4 border-black group">
+                    <div class="relative w-full h-8 bg-black border-2 border-black group">
                         <div id="modal-progress-fill"
-                            class="absolute inset-0 bg-theme-accent w-[0%] border-r-4 border-black flex items-center justify-center overflow-hidden transition-all duration-300">
-                            <span id="modal-progress-percent"
-                                class="text-xs font-black uppercase tracking-tighter mix-blend-difference text-white">0%</span>
+                            class="absolute inset-0 bg-theme-accent w-[0%] border-r-2 border-black flex items-center justify-center overflow-hidden transition-all duration-300">
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <h4 class="text-[10px] font-black uppercase tracking-widest text-theme-muted mb-2">This Week's
+                            Wins</h4>
+                        <div id="current-week-wins" class="space-y-2 max-h-40 overflow-y-auto">
+                            <!-- Wins injected here -->
                         </div>
                     </div>
                 </div>
 
-                <div id="scoreboard-history" class="space-y-6">
+                <div id="scoreboard-history" class="space-y-4">
                     <!-- Historical weeks will be injected here -->
-                </div>
-
-                <!-- Score Control Slider (Manual Progress Adjuster) -->
-                <div class="mt-8 p-4 bg-black/5 border-2 border-dashed border-black/10 rounded-lg space-y-3">
-                    <div class="flex justify-between items-center">
-                        <label class="text-[10px] font-black uppercase tracking-widest text-theme-muted">Manual Progress
-                            Adjuster</label>
-                        <span id="score-slider-val" class="text-sm font-black font-mono">0%</span>
-                    </div>
-                    <input type="range" id="score-slider" min="0" max="150" value="0"
-                        class="w-full h-2 bg-theme-border appearance-none cursor-pointer rounded-full accent-theme-accent focus:outline-none">
                 </div>
             </div>
             <footer class="modal-footer p-4 border-t sticky bottom-0 z-10 flex justify-end items-center">
@@ -316,6 +289,79 @@
                         to Bin</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Cover Letter Modal -->
+    <div id="cover-letter-backdrop"
+        class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[250] p-4 md:p-8 hidden opacity-0 transition-opacity duration-200"
+        role="dialog" aria-modal="true" aria-label="Cover Letter Generator">
+        <div class="modal-container w-full h-full max-w-4xl flex flex-col bg-white border-4 border-black shadow-[8px_8px_0_#000] scale-95 transition-transform duration-200 overflow-hidden"
+            role="document">
+            <header
+                class="modal-header flex items-center justify-between p-4 md:p-6 border-b-4 border-black bg-theme-column">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 bg-theme-accent rounded-full border-2 border-black flex items-center justify-center shadow-[2px_2px_0_#000]">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-xl md:text-2xl font-black text-theme-primary uppercase tracking-tighter">Cover
+                            Letter</h2>
+                        <p id="cover-letter-subtitle" class="text-xs font-bold text-theme-secondary">Generating for...
+                        </p>
+                    </div>
+                </div>
+                <button id="cover-letter-close" type="button"
+                    class="btn-icon p-2 hover:bg-rose-500 hover:text-white transition-colors border-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </header>
+
+            <div class="flex-1 flex flex-col p-4 md:p-6 bg-gray-50 overflow-hidden">
+                <div class="mb-4 flex flex-wrap gap-2 md:gap-3 items-center">
+                    <label class="text-xs font-black text-theme-muted uppercase tracking-widest mr-auto">Template
+                        Angle</label>
+                    <button id="btn-template-efficiency" type="button"
+                        class="bg-theme-accent text-black border-2 border-black text-[10px] md:text-xs font-black px-3 py-1.5 uppercase tracking-widest transition-transform shadow-[2px_2px_0_#000] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">Efficiency</button>
+                    <button id="btn-template-second" type="button"
+                        class="bg-gray-200 hover:bg-gray-300 text-black border-2 border-black text-[10px] md:text-xs font-black px-3 py-1.5 uppercase tracking-widest transition-transform shadow-[2px_2px_0_#000] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">Template
+                        2</button>
+                    <button id="btn-template-third" type="button"
+                        class="bg-gray-200 hover:bg-gray-300 text-black border-2 border-black text-[10px] md:text-xs font-black px-3 py-1.5 uppercase tracking-widest transition-transform shadow-[2px_2px_0_#000] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">Template
+                        3</button>
+                </div>
+                <div id="cover-letter-content" contenteditable="true"
+                    class="flex-1 w-full p-4 md:p-6 text-sm md:text-base font-mono leading-relaxed bg-white border-4 border-black focus:border-theme-accent outline-none overflow-y-auto whitespace-pre-wrap shadow-[inset_4px_4px_0_rgba(0,0,0,0.05)]"
+                    spellcheck="false"></div>
+            </div>
+
+            <footer
+                class="modal-footer p-4 md:p-6 border-t-4 border-black bg-theme-column flex flex-wrap items-center justify-between gap-4">
+                <div class="text-xs font-bold text-theme-muted flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    Ready to export
+                </div>
+                <div class="flex gap-3">
+                    <button id="cover-letter-download" type="button"
+                        class="btn-accent inline-flex items-center gap-2 justify-center text-sm md:text-base font-black px-6 py-3 uppercase tracking-wider transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download PDF
+                    </button>
+                </div>
+            </footer>
         </div>
     </div>
 

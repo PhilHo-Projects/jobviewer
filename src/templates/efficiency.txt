@@ -1,0 +1,18 @@
+Subject: {{title}} Application - Philippe Ho
+
+Hi Hiring Manager,
+
+I’ve been following {{company}}’s work. I’m applying for the {{title}} role because I specialize in bridging the gap between complex game logic and cloud-based infrastructure.
+
+Why I’m a fit for this role:
+* Shipped Experience: I recently delivered a completed game on Steam, managing everything from UI systems to asset pipelines in Unity and C#.
+* Cloud & Networking: I have hands-on experience building automated matchmaking and multiplayer systems using Unity Cloud APIs and AWS.
+* AI-Driven Development: I leverage AI tools (Claude, Cursor, n8n) to rapidly prototype and solve technical integration issues, meaning I spend less time stuck and more time shipping code.
+
+My resume covers my background in Game Development and Full-Stack automation, but I’d love to show you how I can apply my experience to your current pipeline.
+
+Best,
+
+Philippe Ho
+philippeho.popnux.com
+linkedin.com/in/philippe-ho-03
