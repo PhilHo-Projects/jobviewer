@@ -1,7 +1,7 @@
 module.exports = {
     apps: [{
         name: 'job-viewer',
-        script: './server.js',
+        script: './dist-server/server.js',
         env_production: {
             NODE_ENV: 'production',
             PORT: 3004

@@ -1,0 +1,238 @@
+import express, { Request, Response, NextFunction } from 'express';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+import { Job, HistoryEntry } from './shared/types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 3004;
+const BASE_PATH = '/job-viewer';
+
+// Middleware
+app.use(express.json({ limit: '50mb' }));
+app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS,DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (_req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+});
+
+// Serve static files from 'dist' directory in production
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+    app.use(BASE_PATH, express.static(distPath));
+    app.get(`${BASE_PATH}/*`, (req: Request, res: Response, next: NextFunction) => {
+        if (req.path.startsWith(`${BASE_PATH}/api`)) return next();
+        res.sendFile(path.join(distPath, 'index.html'));
+    });
+} else {
+    app.use(BASE_PATH, express.static(path.join(__dirname, 'public')));
+}
+
+// In-memory stores
+let latestJobs: Job[] = [];
+let questHistory: HistoryEntry[] = [];
+
+const JOBS_FILE_PATH = path.join(__dirname, 'jobs.json');
+const HISTORY_FILE_PATH = path.join(__dirname, 'history.json');
+
+function loadJobsFromDisk(): Job[] {
+    try {
+        if (!fs.existsSync(JOBS_FILE_PATH)) return [];
+        const raw = fs.readFileSync(JOBS_FILE_PATH, 'utf8');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+        console.error('Failed to load jobs from disk:', err);
+        return [];
+    }
+}
+
+function saveJobsToDisk(jobs: Job[]): void {
+    try {
+        fs.writeFileSync(JOBS_FILE_PATH, JSON.stringify(jobs, null, 2), 'utf8');
+    } catch (err) {
+        console.error('Failed to save jobs to disk:', err);
+    }
+}
+
+function loadHistoryFromDisk(): HistoryEntry[] {
+    try {
+        if (!fs.existsSync(HISTORY_FILE_PATH)) return [];
+        const raw = fs.readFileSync(HISTORY_FILE_PATH, 'utf8');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+        console.error('Failed to load history from disk:', err);
+        return [];
+    }
+}
+
+function createStableJobId(job: Partial<Job>): string {
+    const basis = [job.url, job.title, job.company, job.location, job.posted]
+        .filter(Boolean)
+        .join('|');
+    return crypto.createHash('sha1').update(basis || JSON.stringify(job)).digest('hex');
+}
+
+function normalizeIncomingJob(job: Partial<Job>): Job {
+    const nowIso = new Date().toISOString();
+    return {
+        ...job,
+        id: job.id || createStableJobId(job),
+        title: job.title || '',
+        company: job.company || '',
+        status: job.status || 'new',
+        statusSummary: job.statusSummary || 'New Job',
+        statusSummaryUpdatedAt: job.statusSummaryUpdatedAt || nowIso,
+        notes: typeof job.notes === 'string' ? job.notes : '',
+        scrapedDate: job.scrapedDate || nowIso,
+        appliedDate: job.appliedDate ?? null,
+    };
+}
+
+function upsertJobs(incomingJobs: Partial<Job>[]): Job[] {
+    const nextJobs: Job[] = [...latestJobs];
+    const idxById = new Map<string, number>(nextJobs.map((j, idx) => [String(j.id), idx]));
+
+    for (const rawJob of incomingJobs) {
+        const j = normalizeIncomingJob(rawJob);
+        const key = String(j.id);
+        const existingIdx = idxById.get(key);
+
+        if (existingIdx === undefined) {
+            nextJobs.push(j);
+            idxById.set(key, nextJobs.length - 1);
+            continue;
+        }
+
+        const existing = nextJobs[existingIdx];
+        nextJobs[existingIdx] = {
+            ...existing,
+            ...j,
+            status: existing.status || j.status || 'new',
+            statusSummary: existing.statusSummary || j.statusSummary || 'New Job',
+            notes: typeof existing.notes === 'string' ? existing.notes : (typeof j.notes === 'string' ? j.notes : ''),
+            scrapedDate: existing.scrapedDate || j.scrapedDate,
+            appliedDate: existing.appliedDate || j.appliedDate || null,
+        };
+    }
+
+    latestJobs = nextJobs;
+    saveJobsToDisk(latestJobs);
+    return latestJobs;
+}
+
+// Load persisted data
+latestJobs = loadJobsFromDisk();
+questHistory = loadHistoryFromDisk();
+
+// --- Routes ---
+
+app.get(`${BASE_PATH}/api/history`, (_req: Request, res: Response) => {
+    res.json(questHistory);
+});
+
+app.post(`${BASE_PATH}/api/receive-jobs`, (req: Request, res: Response) => {
+    const jobsPayload = req.body;
+    if (!Array.isArray(jobsPayload)) {
+        return res.status(400).json({ error: 'Payload must be an array of jobs' });
+    }
+
+    const incoming = jobsPayload.filter(Boolean);
+    const beforeCount = latestJobs.length;
+    upsertJobs(incoming);
+    const afterCount = latestJobs.length;
+
+    return res.status(201).json({
+        message: 'Jobs received successfully',
+        received: incoming.length,
+        before: beforeCount,
+        after: afterCount,
+    });
+});
+
+app.post(`${BASE_PATH}/api/jobs`, (req: Request, res: Response) => {
+    const jobPayload = req.body;
+    if (!jobPayload || typeof jobPayload !== 'object' || Array.isArray(jobPayload)) {
+        return res.status(400).json({ error: 'Payload must be a job object' });
+    }
+
+    const normalized = normalizeIncomingJob(jobPayload);
+    const existed = latestJobs.some(j => String(j.id) === String(normalized.id));
+    upsertJobs([normalized]);
+
+    const saved = latestJobs.find(j => String(j.id) === String(normalized.id)) || normalized;
+    return res.status(existed ? 200 : 201).json(saved);
+});
+
+app.get(`${BASE_PATH}/api/jobs`, (_req: Request, res: Response) => {
+    res.json(latestJobs);
+});
+
+// Bulk-move MUST be before :id route
+app.patch(`${BASE_PATH}/api/jobs/bulk-move`, (req: Request, res: Response) => {
+    const { from, to } = req.body;
+    if (!from || !to) {
+        return res.status(400).json({ error: 'Source (from) and target (to) statuses are required' });
+    }
+
+    let count = 0;
+    const nextJobs = latestJobs.map(j => {
+        if (j.status === from) {
+            count++;
+            return { ...j, status: to };
+        }
+        return j;
+    });
+
+    if (count > 0) {
+        latestJobs = nextJobs;
+        saveJobsToDisk(latestJobs);
+    }
+    res.json({ moved: count, from, to });
+});
+
+app.patch(`${BASE_PATH}/api/jobs/:id`, (req: Request, res: Response) => {
+    const { id } = req.params;
+    const idx = latestJobs.findIndex(j => String(j.id) === String(id));
+    if (idx === -1) {
+        return res.status(404).json({ message: 'Job not found' });
+    }
+
+    const { status, statusSummary, notes, appliedDate } = req.body || {};
+
+    const next: Job = { ...latestJobs[idx] };
+    if (status !== undefined) next.status = status;
+    if (statusSummary !== undefined) {
+        next.statusSummary = statusSummary;
+        next.statusSummaryUpdatedAt = new Date().toISOString();
+    }
+    if (notes !== undefined) next.notes = notes;
+    if (appliedDate !== undefined) next.appliedDate = appliedDate;
+
+    latestJobs[idx] = next;
+    saveJobsToDisk(latestJobs);
+    res.json(next);
+});
+
+app.delete(`${BASE_PATH}/api/jobs/status/:status`, (req: Request, res: Response) => {
+    const { status } = req.params;
+    const beforeCount = latestJobs.length;
+    latestJobs = latestJobs.filter(j => j.status !== status);
+    const afterCount = latestJobs.length;
+    saveJobsToDisk(latestJobs);
+    res.json({ deleted: beforeCount - afterCount, remaining: afterCount });
+});
+
+app.listen(PORT, () => {
+    console.log(`Job Viewer running on port ${PORT}`);
+    console.log(`Access at: http://localhost:${PORT}${BASE_PATH}`);
+});

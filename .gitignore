@@ -6,3 +6,4 @@ node_modules/
 jobs.json
 data/*.json
 dist/
+dist-server/

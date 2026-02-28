@@ -5,11 +5,12 @@
   "description": "LinkedIn job posts viewer for n8n workflow",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node dist-server/server.js",
     "dev:ui": "vite",
-    "dev:server": "nodemon server.js",
+    "dev:server": "nodemon --exec tsx server.ts",
     "dev": "concurrently \"npm run dev:ui\" \"npm run dev:server\"",
-    "build": "vite build"
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "build:server": "tsc -p tsconfig.server.json"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -25,6 +26,7 @@
     "nodemon": "^3.0.1",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.5",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^5.0.0"
   }
