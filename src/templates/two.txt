@@ -1,1 +1,14 @@
-[Content for template two...]
+Dear {{company}} Hiring Team,
+
+I'm applying for the {{title}} position, bringing seven years as a licensed commercial claims adjuster guiding enterprise clients through complex decisions with clear, bilingual communication and structured documentation — paired with technical experience building and integrating systems that taught me to guide clients from understanding their requirements through to implementation.
+
+My client-facing experience comes from those seven years as a commercial claims adjuster for enterprise clients including Lloyd's of London, where resolving claims meant coordinating with insurers, insureds, law enforcement, medical professionals, lawyers, engineers, underwriters, and accountants. I consolidated technical, legal, and financial information into clear presentations and reports that secured payment approvals.
+
+My technical experience comes from going back to school to learn programming, focusing on C++, C# and game development. This led to shipping a Unity game on Steam for Téléfix Productions, where I built core systems (gameplay, controls, UI) and delivered weekly updates that translated technical progress into concepts the project owner could understand and approve. I'm working on a multiplayer project that runs on AWS with a Linux-hosted WebSocket server handling matchmaking, state sync, and chat. I regularly experiment with various APIs and libraries, and work across JavaScript and Linux environments. I'm currently building agentic automation workflows with n8n to explore how API integrations can orchestrate autonomous task execution.
+
+This hands-on work means I understand the technical details, which translates directly into helping clients through discovery, scoping, and implementation — which is exactly what I'd bring to {{company}}.
+
+Best regards,
+Philippe Ho
+514 713‐5487
+philippeho27@gmail.com

@@ -2,11 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { fileURLToPath } from 'url';
 import { Job, HistoryEntry } from './shared/types.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3004;
@@ -23,7 +19,7 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 });
 
 // Serve static files from 'dist' directory in production
-const distPath = path.join(__dirname, 'dist');
+const distPath = path.join(process.cwd(), 'dist');
 if (fs.existsSync(distPath)) {
     app.use(BASE_PATH, express.static(distPath));
     app.get(`${BASE_PATH}/*`, (req: Request, res: Response, next: NextFunction) => {
@@ -31,15 +27,34 @@ if (fs.existsSync(distPath)) {
         res.sendFile(path.join(distPath, 'index.html'));
     });
 } else {
-    app.use(BASE_PATH, express.static(path.join(__dirname, 'public')));
+    app.use(BASE_PATH, express.static(path.join(process.cwd(), 'public')));
 }
 
 // In-memory stores
 let latestJobs: Job[] = [];
 let questHistory: HistoryEntry[] = [];
 
-const JOBS_FILE_PATH = path.join(__dirname, 'jobs.json');
-const HISTORY_FILE_PATH = path.join(__dirname, 'history.json');
+const JOBS_FILE_PATH = path.join(process.cwd(), 'jobs.json');
+const HISTORY_FILE_PATH = path.join(process.cwd(), 'history.json');
+const SCRAPE_INFO_PATH = path.join(process.cwd(), 'scrape_info.json');
+
+function loadScrapeInfo(): { lastTriggerDate: string | null } {
+    try {
+        if (!fs.existsSync(SCRAPE_INFO_PATH)) return { lastTriggerDate: null };
+        const raw = fs.readFileSync(SCRAPE_INFO_PATH, 'utf8');
+        return JSON.parse(raw);
+    } catch (err) {
+        return { lastTriggerDate: null };
+    }
+}
+
+function saveScrapeInfo(info: { lastTriggerDate: string | null }): void {
+    try {
+        fs.writeFileSync(SCRAPE_INFO_PATH, JSON.stringify(info, null, 2), 'utf8');
+    } catch (err) {
+        console.error('Failed to save scrape info:', err);
+    }
+}
 
 function loadJobsFromDisk(): Job[] {
     try {
@@ -230,6 +245,42 @@ app.delete(`${BASE_PATH}/api/jobs/status/:status`, (req: Request, res: Response)
     const afterCount = latestJobs.length;
     saveJobsToDisk(latestJobs);
     res.json({ deleted: beforeCount - afterCount, remaining: afterCount });
+});
+
+app.get(`${BASE_PATH}/api/scrape-info`, (_req: Request, res: Response) => {
+    res.json(loadScrapeInfo());
+});
+
+app.post(`${BASE_PATH}/api/trigger-scrape`, async (_req: Request, res: Response) => {
+    // Hardcoded production n8n webhook URL
+    const webhookUrl = 'http://localhost:5678/webhook/91d4ac64-60fd-4749-9774-342688ff638c';
+
+    const info = loadScrapeInfo();
+    const today = new Date().toISOString().split('T')[0];
+
+    if (info.lastTriggerDate === today) {
+        return res.status(429).json({ error: 'Scrape already triggered today. Limit: 1 per day.' });
+    }
+
+    try {
+        // Trigger n8n webhook (internal localhost call on AWS)
+        const response = await fetch(webhookUrl, {
+            method: 'GET', // Matching the n8n screenshot's GET requirement
+        });
+
+        if (!response.ok) {
+            throw new Error(`n8n responded with status: ${response.status}`);
+        }
+
+        // Save progress if successful
+        info.lastTriggerDate = today;
+        saveScrapeInfo(info);
+
+        res.json({ message: 'Scrape triggered successfully', lastTriggerDate: today });
+    } catch (err: any) {
+        console.error('Failed to trigger n8n:', err);
+        res.status(500).json({ error: `Failed to trigger n8n: ${err.message}` });
+    }
 });
 
 app.listen(PORT, () => {

@@ -1,7 +1,7 @@
 import '../input.css';
 import { jobs, onConfirmProceed, setJobs, activeJobId } from './state';
 import { els, $, setStatus } from './dom';
-import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs } from './api';
+import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs, fetchScrapeInfo, triggerScrape } from './api';
 import { groupJobs } from './utils';
 import { renderBoard, wireDropzones } from './components/board';
 import { openModal, saveModal, closeModal, openScoreboard, closeScoreboard, openBin, closeBin, openConfirm, closeConfirm, openCoverLetterModal, closeCoverLetterModal, setCoverLetterTemplate, downloadCoverLetterPDF } from './components/modals';
@@ -26,6 +26,7 @@ async function init(): Promise<void> {
     els.binEmpty = $('bin-empty');
     els.addBtn = $('add-job');
     els.binBtn = $('view-bin');
+    els.scrapeBtn = $('trigger-scrape');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
     els.sprintPointsText = $('sprint-points-text');
@@ -55,6 +56,49 @@ async function init(): Promise<void> {
     });
     if (els.addBtn) els.addBtn.addEventListener('click', () => openModal(null));
     if (els.binBtn) els.binBtn.addEventListener('click', openBin);
+    if (els.scrapeBtn) els.scrapeBtn.addEventListener('click', async () => {
+        if (!confirm("Trigger a manual LinkedIn scrape (limit 1/day)? This will run your n8n workflow on the server.\n\nNote: The process typically takes about 1 minute.")) return;
+
+        const btn = els.scrapeBtn as HTMLButtonElement;
+        btn.disabled = true;
+
+        // Add a pulsing visual indicator to the button
+        btn.classList.add('animate-pulse');
+
+        setStatus('Triggering scrape...');
+        try {
+            await triggerScrape();
+
+            // Start polling and timer logic
+            const initialCount = jobs.length;
+            let elapsed = 0;
+
+            const timer = setInterval(async () => {
+                elapsed += 5;
+                setStatus(`Scraping in progress... ${elapsed}s (typically ~60s)`);
+                await fetchJobs();
+
+                // If count increases, or 2 minutes pass, stop polling
+                if (jobs.length > initialCount) {
+                    clearInterval(timer);
+                    setStatus(`Scrape complete! Found ${jobs.length - initialCount} new jobs.`);
+                    btn.classList.remove('animate-pulse');
+                    await updateScrapeButtonStatus();
+                } else if (elapsed >= 120) {
+                    clearInterval(timer);
+                    setStatus('Scrape finished (no new jobs found or timed out after 2m).');
+                    btn.classList.remove('animate-pulse');
+                    await updateScrapeButtonStatus();
+                }
+            }, 5000);
+
+        } catch (e: any) {
+            console.error(e);
+            setStatus(`Scrape failed: ${e.message}`);
+            btn.classList.remove('animate-pulse');
+            btn.disabled = false;
+        }
+    });
     if (els.scoreboardBtn) els.scoreboardBtn.addEventListener('click', openScoreboard);
 
     // Modal Wiring
@@ -148,7 +192,26 @@ async function init(): Promise<void> {
     wireDropzones();
 
     // 3. Initial Data Fetch
-    await Promise.all([fetchJobs(), fetchHistory()]);
+    await Promise.all([fetchJobs(), fetchHistory(), updateScrapeButtonStatus()]);
+}
+
+async function updateScrapeButtonStatus() {
+    try {
+        const info = await fetchScrapeInfo();
+        const today = new Date().toISOString().split('T')[0];
+        if (els.scrapeBtn) {
+            const btn = els.scrapeBtn as HTMLButtonElement;
+            if (info.lastTriggerDate === today) {
+                btn.disabled = true;
+                btn.title = "Scrape already triggered today";
+            } else {
+                btn.disabled = false;
+                btn.title = "Trigger Scrape (Max 1/day)";
+            }
+        }
+    } catch (e) {
+        console.error("Failed to update scrape button status", e);
+    }
 }
 
 async function executeBulkMove(fromStatus: string, toStatus: string): Promise<void> {

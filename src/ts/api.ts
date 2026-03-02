@@ -70,3 +70,23 @@ export async function deleteDeletedJobs(): Promise<void> {
     const res = await fetch(`${API_BASE}/jobs/status/deleted`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to clear bin');
 }
+
+export async function fetchScrapeInfo(): Promise<{ lastTriggerDate: string | null }> {
+    const res = await fetch(`${API_BASE}/scrape-info`);
+    if (!res.ok) throw new Error('Failed to fetch scrape info');
+    return await res.json();
+}
+
+export async function triggerScrape(): Promise<{ message: string; lastTriggerDate: string }> {
+    const res = await fetch(`${API_BASE}/trigger-scrape`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Trigger failed' }));
+        throw new Error(err.error || 'Failed to trigger scrape');
+    }
+
+    return await res.json();
+}

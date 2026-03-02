@@ -34,7 +34,8 @@ export const els: Record<string, HTMLElement | null> = {
     modalCoverLetter: null,
     btnTemplateEfficiency: null,
     btnTemplateSecond: null,
-    btnTemplateThird: null
+    btnTemplateThird: null,
+    scrapeBtn: null
 };
 
 export function $(id: string): HTMLElement | null {
