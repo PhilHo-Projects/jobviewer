@@ -314,9 +314,19 @@ app.post(`${BASE_PATH}/api/generate-cover-letter`, async (req: Request, res: Res
             throw new Error(`n8n responded with status: ${response.status}`);
         }
 
-        const result = await response.json();
+        const rawText = await response.text();
+        console.log('[cover-letter] Raw n8n response:', rawText.slice(0, 500));
+
+        let result: any;
+        try {
+            result = JSON.parse(rawText);
+        } catch (_parseErr) {
+            throw new Error(`n8n returned invalid JSON. Raw: "${rawText.slice(0, 200)}"`);
+        }
+
         // Handle n8n response format (array or single object depending on n8n config)
         const text = Array.isArray(result) ? ((result[0] as any)?.text || JSON.stringify(result[0])) : ((result as any)?.text || JSON.stringify(result));
+        console.log('[cover-letter] Extracted text field:', text?.slice(0, 100));
 
         res.json({ text });
     } catch (err: any) {
