@@ -276,7 +276,7 @@ export function closeModal(): void {
 }
 
 // --- Cover Letter Modal Logic ---
-import { jsPDF } from 'jspdf';
+
 import templateEfficiencyRaw from '../../templates/efficiency.txt?raw';
 import templateTwoRaw from '../../templates/two.txt?raw';
 import templateThreeRaw from '../../templates/three.txt?raw';
@@ -299,8 +299,7 @@ export async function generateCoverLetterWithAI(): Promise<void> {
 
     try {
         const result = await generateCoverLetter(job);
-        let htmlText = (result.text || '').replace(/\n/g, '<br/>');
-        els.coverLetterContent.innerHTML = htmlText || 'Received empty response from n8n.';
+        els.coverLetterContent.innerHTML = markdownToHtml(result.text || 'Received empty response from n8n.');
     } catch (err: any) {
         els.coverLetterContent.innerHTML = `<span class="text-rose-500 font-bold">Error generating cover letter: <br/><br/>${err.message}</span>`;
     } finally {
@@ -396,82 +395,77 @@ export function closeCoverLetterModal(): void {
     }
 }
 
+function markdownToHtml(text: string): string {
+    // Escape any raw HTML first
+    let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Bold: **text**
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Italic: *text* (single, not preceded/followed by *)
+    html = html.replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+
+    // Bullet list items: lines starting with * or -
+    html = html.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
+    // Wrap consecutive <li> blocks in <ul>
+    html = html.replace(/(<li>[\s\S]*?<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`);
+
+    // Paragraph breaks (double newlines)
+    html = html.replace(/\n\n/g, '</p><p>');
+    // Remaining single newlines
+    html = html.replace(/\n/g, '<br>');
+
+    return `<p>${html}</p>`;
+}
+
 export function downloadCoverLetterPDF(): void {
     if (!els.coverLetterContent || !activeJobId) return;
-
     const job = jobs.find(j => String(j.id) === String(activeJobId));
     if (!job) return;
 
-    const company = (job.company || 'Company').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const filename = `Cover_Letter_Philippe_Ho_${company}.pdf`;
-
-    const htmlContent = els.coverLetterContent.innerHTML;
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlContent;
-
-    const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, null);
-    let rawText = '';
-    let node;
-    const listItems: string[] = [];
-    let processingList = false;
-
-    while (node = walker.nextNode()) {
-        if (node.nodeType === 3) {
-            let text = (node.textContent || '').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
-            if (processingList && text.trim()) {
-                listItems.push(text);
-            } else {
-                rawText += text;
-            }
-        } else if (node.nodeType === 1) {
-            const elName = node.nodeName.toLowerCase();
-            if (elName === 'br') {
-                rawText += '\n';
-            } else if (elName === 'div' && rawText.length > 0) {
-                if (!rawText.endsWith('\n')) rawText += '\n';
-            } else if (elName === 'li') {
-                processingList = true;
-            } else if (elName === 'ul' || elName === 'ol') {
-                if (!rawText.endsWith('\n\n')) rawText += '\n';
-            }
-        }
-
-        // Handle end of list item
-        if (node.nodeType === 1 && node.nodeName.toLowerCase() === 'li') {
-            // We enter this node above, its children (text) are processed, then we don't easily know when it ends in a single pass without extra tracking.
-            // However, simple parsing: if we encounter an element that implies end, we reset.
-        }
+    const content = els.coverLetterContent.innerHTML;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert('Pop-up blocked! Please allow pop-ups for this site to use PDF print preview.');
+        return;
     }
 
-    // Simplistic text extraction fallback if tree walker approach drops bullets
-    const simpleText = tempDiv.innerText.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
-
-    const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'in',
-        format: 'letter'
-    });
-
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(11);
-
-    const margin = 1;
-    let y = margin;
-    const maxWidth = 8.5 - (margin * 2);
-    const lineHeight = 0.25;
-
-    const lines = pdf.splitTextToSize(simpleText, maxWidth);
-
-    for (let i = 0; i < lines.length; i++) {
-        if (y > 11 - margin) {
-            pdf.addPage();
-            y = margin;
-        }
-        pdf.text(lines[i], margin, y);
-        y += lineHeight;
-    }
-
-    pdf.save(filename);
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Cover Letter – ${job.company || 'Cover Letter'}</title>
+            <style>
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body {
+                    font-family: Georgia, 'Times New Roman', serif;
+                    font-size: 11pt;
+                    line-height: 1.65;
+                    color: #111;
+                    padding: 1in;
+                    max-width: 8.5in;
+                    margin: 0 auto;
+                }
+                p { margin-bottom: 0.75em; }
+                strong { font-weight: bold; }
+                em { font-style: italic; }
+                ul { margin: 0.5em 0 0.75em 1.5em; }
+                li { margin-bottom: 0.35em; }
+                @media print {
+                    body { padding: 0; }
+                    @page { margin: 0.75in; }
+                }
+            </style>
+        </head>
+        <body>${content}</body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 400);
 }
 
 // --- Bin Logic ---
