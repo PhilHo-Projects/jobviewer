@@ -4,7 +4,7 @@ import { els, $, setStatus } from './dom';
 import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs, fetchScrapeInfo, triggerScrape } from './api';
 import { groupJobs } from './utils';
 import { renderBoard, wireDropzones } from './components/board';
-import { openModal, saveModal, closeModal, openScoreboard, closeScoreboard, openBin, closeBin, openConfirm, closeConfirm, openCoverLetterModal, closeCoverLetterModal, setCoverLetterTemplate, downloadCoverLetterPDF } from './components/modals';
+import { openModal, saveModal, closeModal, openScoreboard, closeScoreboard, openBin, closeBin, openConfirm, closeConfirm, openCoverLetterModal, closeCoverLetterModal, setCoverLetterTemplate, downloadCoverLetterPDF, generateCoverLetterWithAI } from './components/modals';
 
 
 async function init(): Promise<void> {
@@ -48,6 +48,7 @@ async function init(): Promise<void> {
     els.btnTemplateEfficiency = $('btn-template-efficiency');
     els.btnTemplateSecond = $('btn-template-second');
     els.btnTemplateThird = $('btn-template-third');
+    els.btnTemplateAi = $('btn-template-ai');
 
     // 2. Wire Global Listeners
     if (els.refreshBtn) els.refreshBtn.addEventListener('click', () => {
@@ -164,6 +165,7 @@ async function init(): Promise<void> {
     if (els.btnTemplateEfficiency) els.btnTemplateEfficiency.addEventListener('click', () => setCoverLetterTemplate('efficiency'));
     if (els.btnTemplateSecond) els.btnTemplateSecond.addEventListener('click', () => setCoverLetterTemplate('two'));
     if (els.btnTemplateThird) els.btnTemplateThird.addEventListener('click', () => setCoverLetterTemplate('three'));
+    if (els.btnTemplateAi) els.btnTemplateAi.addEventListener('click', generateCoverLetterWithAI);
 
     // Escape Key
     document.addEventListener('keydown', (e) => {

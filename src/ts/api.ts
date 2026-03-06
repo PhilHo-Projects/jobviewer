@@ -90,3 +90,18 @@ export async function triggerScrape(): Promise<{ message: string; lastTriggerDat
 
     return await res.json();
 }
+
+export async function generateCoverLetter(job: any): Promise<{ text: string }> {
+    const res = await fetch(`${API_BASE}/generate-cover-letter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job })
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Generation failed' }));
+        throw new Error(err.error || 'Failed to generate cover letter');
+    }
+
+    return await res.json();
+}

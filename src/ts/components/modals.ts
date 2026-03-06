@@ -2,7 +2,7 @@ import { Job } from '../types';
 import { jobs, activeJobId, setActiveJobId, setOnConfirmProceed } from '../state';
 import { els, $, setStatus } from '../dom';
 import { escapeHtml, formatDateForInput, todayIsoDate } from '../utils';
-import { patchJob, createJob } from '../api';
+import { patchJob, createJob, generateCoverLetter } from '../api';
 import { renderBoard } from './board';
 
 // --- Job Modal Logic ---
@@ -280,6 +280,34 @@ import { jsPDF } from 'jspdf';
 import templateEfficiencyRaw from '../../templates/efficiency.txt?raw';
 import templateTwoRaw from '../../templates/two.txt?raw';
 import templateThreeRaw from '../../templates/three.txt?raw';
+
+export async function generateCoverLetterWithAI(): Promise<void> {
+    if (!activeJobId || !els.coverLetterContent || !els.btnTemplateAi) return;
+    const job = jobs.find(j => String(j.id) === String(activeJobId));
+    if (!job) return;
+
+    // Reset button styles
+    [els.btnTemplateEfficiency, els.btnTemplateSecond, els.btnTemplateThird].forEach(btn => {
+        if (!btn) return;
+        btn.classList.remove('bg-theme-accent', 'text-black');
+        btn.classList.add('bg-gray-200', 'text-black');
+    });
+
+    els.btnTemplateAi.classList.add('animate-pulse', 'opacity-80');
+    els.btnTemplateAi.setAttribute('disabled', 'true');
+    els.coverLetterContent.innerHTML = '<div class="text-theme-muted flex items-center gap-2"><svg class="w-5 h-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating with AI Magic... Please wait <br/><br/>(Triggering n8n webhook)</div>';
+
+    try {
+        const result = await generateCoverLetter(job);
+        let htmlText = (result.text || '').replace(/\n/g, '<br/>');
+        els.coverLetterContent.innerHTML = htmlText || 'Received empty response from n8n.';
+    } catch (err: any) {
+        els.coverLetterContent.innerHTML = `<span class="text-rose-500 font-bold">Error generating cover letter: <br/><br/>${err.message}</span>`;
+    } finally {
+        els.btnTemplateAi.classList.remove('animate-pulse', 'opacity-80');
+        els.btnTemplateAi.removeAttribute('disabled');
+    }
+}
 
 export function setCoverLetterTemplate(type: string): void {
     if (!activeJobId || !els.coverLetterContent) return;

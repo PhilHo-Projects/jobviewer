@@ -35,6 +35,7 @@ export const els: Record<string, HTMLElement | null> = {
     btnTemplateEfficiency: null,
     btnTemplateSecond: null,
     btnTemplateThird: null,
+    btnTemplateAi: null,
     scrapeBtn: null
 };
 

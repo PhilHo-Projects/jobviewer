@@ -251,6 +251,80 @@ app.get(`${BASE_PATH}/api/scrape-info`, (_req: Request, res: Response) => {
     res.json(loadScrapeInfo());
 });
 
+app.post(`${BASE_PATH}/api/generate-cover-letter`, async (req: Request, res: Response) => {
+    // production url: http://localhost:5678/webhook/82cb94bc-6484-4fb9-bf9d-d521c667f9f6
+    // test url: http://localhost:5678/webhook-test/82cb94bc-6484-4fb9-bf9d-d521c667f9f6
+    const webhookUrl = 'http://localhost:5678/webhook/82cb94bc-6484-4fb9-bf9d-d521c667f9f6';
+    const testWebhookUrl = 'http://localhost:5678/webhook-test/82cb94bc-6484-4fb9-bf9d-d521c667f9f6';
+
+    try {
+        const { job } = req.body;
+
+        let identity = {};
+        const identityPath = path.join(process.cwd(), 'src', 'assets', 'identity.json');
+        if (fs.existsSync(identityPath)) {
+            identity = JSON.parse(fs.readFileSync(identityPath, 'utf8'));
+        }
+
+        const urlToUse = process.env.NODE_ENV === 'production' ? webhookUrl : testWebhookUrl;
+        const response = await fetch(urlToUse, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job, identity }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`n8n responded with status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        // Handle n8n response format (array or single object depending on n8n config)
+        const text = Array.isArray(result) ? ((result[0] as any)?.text || JSON.stringify(result[0])) : ((result as any)?.text || JSON.stringify(result));
+
+        res.json({ text });
+    } catch (err: any) {
+        console.error('Failed to generate cover letter via n8n:', err);
+        res.status(500).json({ error: `Failed to generate cover letter: ${err.message}` });
+    }
+});
+
+app.post(`${BASE_PATH}/api/generate-cover-letter`, async (req: Request, res: Response) => {
+    // production url: http://localhost:5678/webhook/82cb94bc-6484-4fb9-bf9d-d521c667f9f6
+    // test url: http://localhost:5678/webhook-test/82cb94bc-6484-4fb9-bf9d-d521c667f9f6
+    const webhookUrl = 'http://localhost:5678/webhook/82cb94bc-6484-4fb9-bf9d-d521c667f9f6';
+    const testWebhookUrl = 'http://localhost:5678/webhook-test/82cb94bc-6484-4fb9-bf9d-d521c667f9f6';
+
+    try {
+        const { job } = req.body;
+
+        let identity = {};
+        const identityPath = path.join(process.cwd(), 'src', 'assets', 'identity.json');
+        if (fs.existsSync(identityPath)) {
+            identity = JSON.parse(fs.readFileSync(identityPath, 'utf8'));
+        }
+
+        const urlToUse = process.env.NODE_ENV === 'production' ? webhookUrl : testWebhookUrl;
+        const response = await fetch(urlToUse, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job, identity }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`n8n responded with status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        // Handle n8n response format (array or single object depending on n8n config)
+        const text = Array.isArray(result) ? ((result[0] as any)?.text || JSON.stringify(result[0])) : ((result as any)?.text || JSON.stringify(result));
+
+        res.json({ text });
+    } catch (err: any) {
+        console.error('Failed to generate cover letter via n8n:', err);
+        res.status(500).json({ error: `Failed to generate cover letter: ${err.message}` });
+    }
+});
+
 app.post(`${BASE_PATH}/api/trigger-scrape`, async (_req: Request, res: Response) => {
     // Hardcoded production n8n webhook URL
     const webhookUrl = 'http://localhost:5678/webhook/91d4ac64-60fd-4749-9774-342688ff638c';

@@ -1,0 +1,95 @@
+{
+    "personal_info": {
+        "name": "Philippe Ho",
+        "role": "Full-Stack Developer",
+        "email": "philippeho27@gmail.com",
+        "phone": "(514) 713-5487",
+        "location": "Montréal, Québec",
+        "languages": [
+            "English (Fluent)",
+            "French (Fluent)"
+        ]
+    },
+    "summary": "Full-Stack Developer with experience in client solution delivery, API integration, and system automation. Delivered complete technical projects from concept to deployment, with hands-on experience in cloud platforms and workflow automation.",
+    "skills": {
+        "ai_tools": [
+            "Claude",
+            "Gemini",
+            "ChatGPT",
+            "Perplexity",
+            "n8n",
+            "Cursor"
+        ],
+        "cloud_and_apis": [
+            "Unity Cloud Code",
+            "AWS GameLift",
+            "Apify",
+            "Spotify API"
+        ],
+        "technical": [
+            "C#",
+            "C++",
+            "JavaScript",
+            "Python",
+            "Linux",
+            "AWS",
+            "GitHub",
+            "Unity",
+            "Unreal Engine"
+        ]
+    },
+    "experience": [
+        {
+            "company": "Téléfix Productions",
+            "role": "Game Programmer",
+            "location": "Montréal, Canada",
+            "date": "01/2024-11/2024",
+            "highlights": [
+                "Delivered completed game released on Steam",
+                "Managed project timeline and resolved technical integration issues",
+                "Implemented workflow logic, UI systems, and asset pipelines using Unity & C#",
+                "Leveraged AI tools for rapid prototyping and technical problem-solving"
+            ]
+        }
+    ],
+    "projects": [
+        {
+            "name": "Online Multiplayer Games",
+            "description": "Built multiplayer game using Unity and WebSockets on AWS Linux server. Features automated matchmaking system and complete game session management."
+        },
+        {
+            "name": "Unity Cloud API Integration",
+            "description": "Integrated Unity Cloud services for turn-based multiplayer platform. Leveraged CloudCode APIs and Unity's lobby system to implement automated matchmaking and game sessions."
+        },
+        {
+            "name": "Multiplayer Networking Systems",
+            "description": "Built competitive multiplayer shooter in Unreal Engine using C++ and networked architecture. Implemented client-server communication, state replication, and real-time event handling across distributed game sessions."
+        }
+    ],
+    "education": [
+        {
+            "institution": "Collège de Bois-de-Boulogne",
+            "location": "Montréal, Canada",
+            "date": "2022-2023",
+            "details": "Game Development Program, worked with Unity & Unreal Engine. Learned C++, C#, GitHub, Agile Methodology and 3-months internship at an indie company."
+        },
+        {
+            "institution": "Concordia University",
+            "location": "Montréal, Canada",
+            "date": "2008-2011",
+            "details": "Civil Engineering - 56 Completed credits"
+        }
+    ],
+    "tone_and_vibes": {
+        "instructions": "Use this JSON context to generate a highly targeted, no-fluff cover letter that bridges my specific experience with the target job's requirements.",
+        "vibes": "Technical, efficient, direct, results-oriented. A game-dev who pivoted into full-stack and automation.",
+        "avoid_phrases": [
+            "passionate",
+            "thrilled to apply",
+            "excited for the opportunity",
+            "dynamic team",
+            "I believe my skills are a perfect match"
+        ],
+        "focus": "Bridging the gap between complex logic and cloud infrastructure, shipping complete products to production, and leveraging AI to rapidly solve technical blockers."
+    }
+}
