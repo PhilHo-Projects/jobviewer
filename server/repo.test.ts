@@ -61,3 +61,71 @@ test('getUserById returns null for unknown id', () => {
     assert.equal(getUserById(db, 999), null);
     db.close();
 });
+
+import { upsertJobs, getJobs, getJobById, patchJob, bulkMove, deleteByStatus } from './repo.js';
+
+function seededDb() {
+    const db = openDb(':memory:');
+    seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
+    return db;
+}
+
+test('upsertJobs assigns a stable id and getJobs is scoped per user', () => {
+    const db = seededDb();
+    const owner = getOwnerUser(db)!;
+    const demo = getDemoUser(db)!;
+
+    upsertJobs(db, owner.id, [{ title: 'Owner Job', company: 'Acme' }]);
+    upsertJobs(db, demo.id, [{ title: 'Demo Job', company: 'Globex' }]);
+
+    const ownerJobs = getJobs(db, owner.id);
+    const demoJobs = getJobs(db, demo.id);
+    assert.equal(ownerJobs.length, 1);
+    assert.equal(demoJobs.length, 1);
+    assert.equal(ownerJobs[0].title, 'Owner Job');
+    assert.equal(demoJobs[0].title, 'Demo Job');
+    assert.ok(ownerJobs[0].id);
+    db.close();
+});
+
+test('upsertJobs merges existing rows without clobbering status/notes', () => {
+    const db = seededDb();
+    const owner = getOwnerUser(db)!;
+    const [created] = upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', status: 'in_progress', notes: 'mine' }]);
+    assert.equal(created.status, 'in_progress');
+    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T2', company: 'C', status: 'new', notes: '' }]);
+    const after = getJobById(db, owner.id, 'j1')!;
+    assert.equal(after.status, 'in_progress');
+    assert.equal(after.notes, 'mine');
+    assert.equal(after.title, 'T2');
+    db.close();
+});
+
+test('patchJob updates only the given fields and is user-scoped', () => {
+    const db = seededDb();
+    const owner = getOwnerUser(db)!;
+    const demo = getDemoUser(db)!;
+    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', status: 'new' }]);
+
+    const updated = patchJob(db, owner.id, 'j1', { status: 'completed', statusSummary: 'Rejected' });
+    assert.equal(updated!.status, 'completed');
+    assert.equal(updated!.statusSummary, 'Rejected');
+
+    assert.equal(getJobById(db, demo.id, 'j1'), null);
+    assert.equal(patchJob(db, demo.id, 'j1', { status: 'new' }), null);
+    db.close();
+});
+
+test('bulkMove and deleteByStatus are user-scoped', () => {
+    const db = seededDb();
+    const owner = getOwnerUser(db)!;
+    upsertJobs(db, owner.id, [
+        { id: 'a', title: 'A', company: 'C', status: 'new' },
+        { id: 'b', title: 'B', company: 'C', status: 'new' },
+        { id: 'c', title: 'C', company: 'C', status: 'deleted' },
+    ]);
+    assert.equal(bulkMove(db, owner.id, 'new', 'deleted'), 2);
+    assert.equal(deleteByStatus(db, owner.id, 'deleted'), 3);
+    assert.equal(getJobs(db, owner.id).length, 0);
+    db.close();
+});
