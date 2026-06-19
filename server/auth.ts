@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import type { Request, Response, NextFunction } from 'express';
+import type { Db } from './db.js';
+import type { SessionUser } from '../shared/types.js';
+import { getUserById, getDemoUser } from './repo.js';
 
 const SCRYPT_KEYLEN = 64;
 
@@ -103,4 +107,51 @@ export function buildSessionCookie(token: string, basePath: string): string {
 
 export function buildClearCookie(basePath: string): string {
     return `${COOKIE_NAME}=;${cookieFlags(basePath)}; Max-Age=0`;
+}
+
+export interface AuthedRequest extends Request {
+    user?: SessionUser | null;
+    userId?: number | null;
+}
+
+export function attachUser(db: Db, secret: string) {
+    return (req: AuthedRequest, _res: Response, next: NextFunction): void => {
+        let user: SessionUser | null = null;
+        const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
+        if (token) {
+            const verified = verifySessionToken(token, secret);
+            if (verified) {
+                const u = getUserById(db, verified.userId);
+                if (u && u.role === 'owner') user = u;
+            }
+        }
+        if (!user) user = getDemoUser(db);
+        req.user = user;
+        req.userId = user ? user.id : null;
+        next();
+    };
+}
+
+export function requireOwner(req: AuthedRequest, res: Response, next: NextFunction): void {
+    if (!req.user || req.user.role !== 'owner') {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+    }
+    next();
+}
+
+export function requireWebhookSecret(req: Request, res: Response, next: NextFunction): void {
+    const expected = process.env.WEBHOOK_SECRET;
+    const provided = req.headers['x-webhook-secret'];
+    if (!expected || typeof provided !== 'string') {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+    }
+    const a = Buffer.from(expected);
+    const b = Buffer.from(provided);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+    }
+    next();
 }
