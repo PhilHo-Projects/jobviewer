@@ -129,3 +129,28 @@ test('bulkMove and deleteByStatus are user-scoped', () => {
     assert.equal(getJobs(db, owner.id).length, 0);
     db.close();
 });
+
+import { getHistory, getScrapeInfo, setScrapeInfo, insertHistory } from './repo.js';
+
+test('history is user-scoped', () => {
+    const db = seededDb();
+    const owner = getOwnerUser(db)!;
+    const demo = getDemoUser(db)!;
+    insertHistory(db, owner.id, {
+        date: '2026-06-01', wins: [{ title: 'A', company: 'C' }],
+        basePoints: 5, scoreMultiplier: 1, totalPoints: 5,
+    });
+    assert.equal(getHistory(db, owner.id).length, 1);
+    assert.equal(getHistory(db, owner.id)[0].wins[0].title, 'A');
+    assert.equal(getHistory(db, demo.id).length, 0);
+    db.close();
+});
+
+test('scrape_info round-trips per user', () => {
+    const db = seededDb();
+    const owner = getOwnerUser(db)!;
+    assert.deepEqual(getScrapeInfo(db, owner.id), { lastTriggerDate: null });
+    setScrapeInfo(db, owner.id, '2026-06-18');
+    assert.deepEqual(getScrapeInfo(db, owner.id), { lastTriggerDate: '2026-06-18' });
+    db.close();
+});

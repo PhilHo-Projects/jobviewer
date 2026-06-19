@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import type { Db } from './db.js';
-import type { Job, SessionUser } from '../shared/types.js';
+import type { HistoryEntry, Job, SessionUser } from '../shared/types.js';
 
 interface UserRow {
     id: number;
@@ -163,4 +163,45 @@ export function deleteByStatus(db: Db, userId: number, status: string): number {
         .prepare(`DELETE FROM jobs WHERE user_id=? AND status=?`)
         .run(userId, status);
     return info.changes;
+}
+
+export function getHistory(db: Db, userId: number): HistoryEntry[] {
+    const rows = db
+        .prepare(`SELECT date, wins, basePoints, scoreMultiplier, totalPoints FROM history WHERE user_id=? ORDER BY date DESC`)
+        .all(userId) as any[];
+    return rows.map((r) => ({
+        date: r.date,
+        wins: r.wins ? JSON.parse(r.wins) : [],
+        basePoints: r.basePoints,
+        scoreMultiplier: r.scoreMultiplier,
+        totalPoints: r.totalPoints,
+    }));
+}
+
+export function insertHistory(db: Db, userId: number, entry: HistoryEntry): void {
+    db.prepare(
+        `INSERT OR REPLACE INTO history (user_id, date, wins, basePoints, scoreMultiplier, totalPoints)
+         VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(
+        userId,
+        entry.date,
+        JSON.stringify(entry.wins ?? []),
+        entry.basePoints,
+        entry.scoreMultiplier,
+        entry.totalPoints
+    );
+}
+
+export function getScrapeInfo(db: Db, userId: number): { lastTriggerDate: string | null } {
+    const row = db
+        .prepare(`SELECT lastTriggerDate FROM scrape_info WHERE user_id=?`)
+        .get(userId) as { lastTriggerDate: string | null } | undefined;
+    return { lastTriggerDate: row ? row.lastTriggerDate : null };
+}
+
+export function setScrapeInfo(db: Db, userId: number, lastTriggerDate: string): void {
+    db.prepare(
+        `INSERT INTO scrape_info (user_id, lastTriggerDate) VALUES (?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET lastTriggerDate=excluded.lastTriggerDate`
+    ).run(userId, lastTriggerDate);
 }
