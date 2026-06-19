@@ -19,6 +19,10 @@
     },
     "include": [
         "server.ts",
+        "server/**/*.ts",
         "shared/**/*.ts"
+    ],
+    "exclude": [
+        "server/**/*.test.ts"
     ]
 }
