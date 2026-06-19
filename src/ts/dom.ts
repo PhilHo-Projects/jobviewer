@@ -36,7 +36,17 @@ export const els: Record<string, HTMLElement | null> = {
     btnTemplateSecond: null,
     btnTemplateThird: null,
     btnTemplateAi: null,
-    scrapeBtn: null
+    scrapeBtn: null,
+    signInBtn: null,
+    logOutBtn: null,
+    demoBanner: null,
+    bannerSignIn: null,
+    loginBackdrop: null,
+    loginClose: null,
+    loginUsername: null,
+    loginPassword: null,
+    loginError: null,
+    loginSubmit: null
 };
 
 export function $(id: string): HTMLElement | null {

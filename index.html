@@ -39,6 +39,14 @@
 
                 <div class="flex items-center gap-2">
                     <div id="statusText" class="hidden sm:block text-xs text-theme-muted font-medium mr-2"></div>
+                    <button id="sign-in" type="button" title="Sign In"
+                        class="btn-accent inline-flex items-center justify-center text-xs font-black uppercase tracking-widest px-3 py-2 border-2 border-black shadow-[2px_2px_0_#000] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                        Sign In
+                    </button>
+                    <button id="log-out" type="button" title="Log Out"
+                        class="btn-icon hidden inline-flex items-center justify-center text-xs font-black uppercase tracking-widest px-3 py-2 border-2 transition-all active:scale-95">
+                        Log Out
+                    </button>
                     <button id="add-job" type="button" title="Add Manual Job"
                         class="btn-accent inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
@@ -76,6 +84,13 @@
             </div>
         </div>
     </header>
+
+    <div id="demo-banner"
+        class="hidden bg-yellow-300 border-b-2 border-black text-black text-[11px] md:text-xs font-bold text-center py-1.5 px-4">
+        Public demo — changes won't be saved.
+        <button id="banner-sign-in" type="button" class="underline font-black ml-1">Sign in</button>
+        for live features.
+    </div>
 
     <main class="max-w-[1400px] mx-auto p-4 md:p-6 overflow-hidden">
         <section
@@ -383,6 +398,42 @@
                     </button>
                 </div>
             </footer>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-backdrop"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[300] p-4 hidden opacity-0 transition-opacity duration-200"
+        role="dialog" aria-modal="true" aria-label="Sign In">
+        <div class="modal-container w-full max-w-sm flex flex-col scale-95 transition-transform duration-200 overflow-hidden"
+            role="document">
+            <header class="modal-header flex items-center justify-between p-4 border-b sticky top-0 z-10">
+                <h2 class="text-lg font-black text-theme-primary uppercase tracking-widest">Owner Sign In</h2>
+                <button id="login-close" type="button"
+                    class="text-theme-secondary hover:text-theme-primary transition-colors p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div class="p-6 space-y-4">
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Username</label>
+                    <input id="login-username" type="text" autocomplete="username"
+                        class="input-field text-sm px-3 py-2.5 outline-none" />
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Password</label>
+                    <input id="login-password" type="password" autocomplete="current-password"
+                        class="input-field text-sm px-3 py-2.5 outline-none" />
+                </div>
+                <div id="login-error" class="hidden text-xs font-bold text-rose-500"></div>
+                <button id="login-submit" type="button"
+                    class="btn-accent w-full bg-emerald-400 text-black border-2 border-black shadow-[4px_4px_0_#000] text-sm font-black px-4 py-2.5 uppercase tracking-widest transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                    Sign In
+                </button>
+            </div>
         </div>
     </div>
 
