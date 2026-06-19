@@ -23,3 +23,11 @@ export interface HistoryEntry {
     scoreMultiplier: number;
     totalPoints: number;
 }
+
+export type Role = 'owner' | 'demo';
+
+export interface SessionUser {
+    id: number;
+    username: string;
+    role: Role;
+}
