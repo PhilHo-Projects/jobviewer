@@ -197,6 +197,28 @@ test('migrateFromJson imports legacy json into the owner once', () => {
     }
 });
 
+test('migrateFromJson tolerates legacy-shaped history without a date', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jv-migrate-legacy-'));
+    fs.writeFileSync(path.join(dir, 'jobs.json'), JSON.stringify([
+        { id: 'm1', title: 'Migrated', company: 'Old', status: 'new' },
+    ]));
+    // old history.json shape: weekRange/percent/jobTitles, no `date`
+    fs.writeFileSync(path.join(dir, 'history.json'), JSON.stringify([
+        { weekRange: 'Jan 12 - Jan 18', percent: 110, jobTitles: ['X', 'Y'] },
+    ]));
+    try {
+        const db = openDb(':memory:');
+        seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
+        const owner = getOwnerUser(db)!;
+        migrateFromJson(db, owner.id, dir); // must not throw
+        assert.equal(repoGetJobs(db, owner.id).length, 1);
+        assert.equal(getHistory(db, owner.id).length, 0); // legacy row skipped
+        db.close();
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
 import { seedDemoJobs } from './db.js';
 
 test('seedDemoJobs loads the fixture once for the demo user', () => {

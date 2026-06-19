@@ -127,7 +127,13 @@ export function migrateFromJson(db: Db, ownerId: number, cwd: string): void {
 
     const history = readJsonFile<HistoryEntry[]>(path.join(cwd, 'history.json'), []);
     if (Array.isArray(history)) {
-        for (const entry of history) insertHistory(db, ownerId, entry);
+        // Skip legacy/malformed rows that predate the current HistoryEntry shape
+        // (older history.json files used weekRange/percent and have no `date`).
+        for (const entry of history) {
+            if (entry && typeof (entry as any).date === 'string' && (entry as any).date) {
+                insertHistory(db, ownerId, entry);
+            }
+        }
     }
 
     const scrape = readJsonFile<{ lastTriggerDate: string | null }>(
