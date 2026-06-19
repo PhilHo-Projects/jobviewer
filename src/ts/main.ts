@@ -1,7 +1,7 @@
 import '../input.css';
-import { jobs, onConfirmProceed, setJobs, activeJobId } from './state';
+import { jobs, onConfirmProceed, setJobs, activeJobId, setIsOwner, setCurrentUser } from './state';
 import { els, $, setStatus } from './dom';
-import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs, fetchScrapeInfo, triggerScrape } from './api';
+import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs, fetchScrapeInfo, triggerScrape, fetchMe, login, logout } from './api';
 import { groupJobs } from './utils';
 import { renderBoard, wireDropzones } from './components/board';
 import { openModal, saveModal, closeModal, openScoreboard, closeScoreboard, openBin, closeBin, openConfirm, closeConfirm, openCoverLetterModal, closeCoverLetterModal, setCoverLetterTemplate, downloadCoverLetterPDF, generateCoverLetterWithAI } from './components/modals';
@@ -27,6 +27,16 @@ async function init(): Promise<void> {
     els.addBtn = $('add-job');
     els.binBtn = $('view-bin');
     els.scrapeBtn = $('trigger-scrape');
+    els.signInBtn = $('sign-in');
+    els.logOutBtn = $('log-out');
+    els.demoBanner = $('demo-banner');
+    els.bannerSignIn = $('banner-sign-in');
+    els.loginBackdrop = $('login-backdrop');
+    els.loginClose = $('login-close');
+    els.loginUsername = $('login-username');
+    els.loginPassword = $('login-password');
+    els.loginError = $('login-error');
+    els.loginSubmit = $('login-submit');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
     els.sprintPointsText = $('sprint-points-text');
@@ -191,10 +201,88 @@ async function init(): Promise<void> {
         });
     }
 
+    // Auth wiring
+    const openLogin = () => {
+        if (els.loginError) { els.loginError.textContent = ''; els.loginError.classList.add('hidden'); }
+        if (els.loginBackdrop) {
+            els.loginBackdrop.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                els.loginBackdrop!.classList.remove('opacity-0');
+                const doc = els.loginBackdrop!.querySelector('[role="document"]');
+                if (doc) doc.classList.remove('scale-95');
+            });
+        }
+        (els.loginUsername as HTMLInputElement | null)?.focus();
+    };
+    const closeLogin = () => {
+        if (els.loginBackdrop) {
+            els.loginBackdrop.classList.add('opacity-0');
+            const doc = els.loginBackdrop.querySelector('[role="document"]');
+            if (doc) doc.classList.add('scale-95');
+            setTimeout(() => {
+                if (els.loginBackdrop!.classList.contains('opacity-0')) els.loginBackdrop!.classList.add('hidden');
+            }, 200);
+        }
+    };
+
+    if (els.signInBtn) els.signInBtn.addEventListener('click', openLogin);
+    if (els.bannerSignIn) els.bannerSignIn.addEventListener('click', openLogin);
+    if (els.loginClose) els.loginClose.addEventListener('click', closeLogin);
+    if (els.loginBackdrop) els.loginBackdrop.addEventListener('click', (e) => {
+        if (e.target === els.loginBackdrop) closeLogin();
+    });
+
+    const submitLogin = async () => {
+        const username = (els.loginUsername as HTMLInputElement | null)?.value || '';
+        const password = (els.loginPassword as HTMLInputElement | null)?.value || '';
+        try {
+            await login(username, password);
+            await refreshAuth();
+            await Promise.all([fetchJobs(), fetchHistory(), updateScrapeButtonStatus()]);
+            closeLogin();
+            setStatus('Signed in');
+        } catch {
+            if (els.loginError) {
+                els.loginError.textContent = 'Invalid credentials';
+                els.loginError.classList.remove('hidden');
+            }
+        }
+    };
+    if (els.loginSubmit) els.loginSubmit.addEventListener('click', submitLogin);
+    if (els.loginPassword) els.loginPassword.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Enter') submitLogin();
+    });
+
+    if (els.logOutBtn) els.logOutBtn.addEventListener('click', async () => {
+        await logout();
+        await refreshAuth();
+        await Promise.all([fetchJobs(), fetchHistory()]);
+        setStatus('Signed out');
+    });
+
     wireDropzones();
 
     // 3. Initial Data Fetch
+    await refreshAuth();
     await Promise.all([fetchJobs(), fetchHistory(), updateScrapeButtonStatus()]);
+}
+
+async function refreshAuth(): Promise<void> {
+    const me = await fetchMe();
+    setIsOwner(me.authenticated);
+    setCurrentUser({ username: me.username, role: me.role });
+    applyAuthVisibility(me.authenticated);
+}
+
+function applyAuthVisibility(owner: boolean): void {
+    const show = (el: HTMLElement | null, visible: boolean) => {
+        if (el) el.classList.toggle('hidden', !visible);
+    };
+    show(els.signInBtn, !owner);
+    show(els.logOutBtn, owner);
+    show(els.demoBanner, !owner);
+    show(els.scrapeBtn, owner);          // n8n scraper is owner-only
+    show(els.btnTemplateAi, owner);      // AI cover letter (n8n + PII) is owner-only
 }
 
 async function updateScrapeButtonStatus() {
