@@ -196,3 +196,25 @@ test('migrateFromJson imports legacy json into the owner once', () => {
         fs.rmSync(dir, { recursive: true, force: true });
     }
 });
+
+import { seedDemoJobs } from './db.js';
+
+test('seedDemoJobs loads the fixture once for the demo user', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jv-sample-'));
+    const samplePath = path.join(dir, 'public-sample.json');
+    fs.writeFileSync(samplePath, JSON.stringify([
+        { id: 's1', title: 'Sample', company: 'Demo', status: 'new' },
+    ]));
+    try {
+        const db = openDb(':memory:');
+        seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
+        const demo = getDemoUser(db)!;
+        seedDemoJobs(db, samplePath);
+        assert.equal(repoGetJobs(db, demo.id).length, 1);
+        seedDemoJobs(db, samplePath);
+        assert.equal(repoGetJobs(db, demo.id).length, 1);
+        db.close();
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});

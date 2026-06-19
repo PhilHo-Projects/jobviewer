@@ -1,0 +1,54 @@
+[
+  {
+    "id": "demo-acting-1",
+    "url": "https://hollywood.example/lead-role-space-ninja",
+    "title": "Lead Role: Space Ninja",
+    "company": "Paramount-ish Pictures",
+    "location": "Mars Colony (Set A)",
+    "posted": "Just now",
+    "status": "new",
+    "statusSummary": "New Job",
+    "notes": "Sample data for the public demo. Sign in to see real searches.",
+    "scrapedDate": "2026-06-01T11:53:00.000Z",
+    "appliedDate": null
+  },
+  {
+    "id": "demo-acting-2",
+    "url": "https://hollywood.example/background-extra-zombie",
+    "title": "Background Extra: Zombie #402",
+    "company": "Undead Productions",
+    "location": "Atlanta, GA",
+    "posted": "2 hours ago",
+    "status": "in_progress",
+    "statusSummary": "Easy Applied",
+    "notes": "Sample data for the public demo.",
+    "scrapedDate": "2026-06-01T14:30:00.000Z",
+    "appliedDate": null
+  },
+  {
+    "id": "demo-acting-3",
+    "url": "https://hollywood.example/stunt-double-detective",
+    "title": "Stunt Double: Grumpy Detective",
+    "company": "Noir Films LLC",
+    "location": "Detroit, MI",
+    "posted": "1 day ago",
+    "status": "completed",
+    "statusSummary": "Rejected",
+    "notes": "Sample data for the public demo.",
+    "scrapedDate": "2026-05-30T10:00:00.000Z",
+    "appliedDate": null
+  },
+  {
+    "id": "demo-acting-4",
+    "url": "https://hollywood.example/lead-vampire-musical",
+    "title": "Lead Vampire (Tenor)",
+    "company": "Broadway on Blood",
+    "location": "New York, NY",
+    "posted": "5 minutes ago",
+    "status": "new",
+    "statusSummary": "New Job",
+    "notes": "Sample data for the public demo.",
+    "scrapedDate": "2026-06-01T11:45:00.000Z",
+    "appliedDate": null
+  }
+]

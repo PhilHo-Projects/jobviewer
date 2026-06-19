@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { hashPassword } from './auth.js';
-import { upsertJobs, insertHistory, setScrapeInfo, getJobs } from './repo.js';
+import { upsertJobs, insertHistory, setScrapeInfo, getJobs, getDemoUser } from './repo.js';
 import type { Job, HistoryEntry } from '../shared/types.js';
 
 export type Db = Database.Database;
@@ -135,4 +135,15 @@ export function migrateFromJson(db: Db, ownerId: number, cwd: string): void {
         { lastTriggerDate: null }
     );
     if (scrape && scrape.lastTriggerDate) setScrapeInfo(db, ownerId, scrape.lastTriggerDate);
+}
+
+/** Seed the demo user's frozen sample jobs from public-sample.json (idempotent). */
+export function seedDemoJobs(db: Db, samplePath: string): void {
+    const demo = getDemoUser(db);
+    if (!demo) return;
+    if (getJobs(db, demo.id).length > 0) return; // already seeded
+    const sample = readJsonFile<Job[]>(samplePath, []);
+    if (Array.isArray(sample) && sample.length > 0) {
+        upsertJobs(db, demo.id, sample);
+    }
 }
