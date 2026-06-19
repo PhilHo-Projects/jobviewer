@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
+import { hashPassword } from './auth.js';
 
 export type Db = Database.Database;
 
@@ -58,4 +59,46 @@ export function openDb(dbPath: string): Db {
     db.pragma('foreign_keys = ON');
     initSchema(db);
     return db;
+}
+
+export interface SeedOptions {
+    adminUsername?: string;
+    adminPassword?: string;
+}
+
+const DEFAULT_USERNAME = 'me';
+const DEFAULT_PASSWORD = '0000';
+
+export function seedUsers(db: Db, opts: SeedOptions = {}): void {
+    const adminUsername = opts.adminUsername || process.env.ADMIN_USERNAME || DEFAULT_USERNAME;
+    const adminPassword = opts.adminPassword || process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD;
+    const now = new Date().toISOString();
+
+    const owner = db.prepare(`SELECT * FROM users WHERE role='owner'`).get() as
+        | { id: number; username: string; password_hash: string | null }
+        | undefined;
+
+    if (!owner) {
+        db.prepare(
+            `INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, 'owner', ?)`
+        ).run(adminUsername, hashPassword(adminPassword), now);
+    } else {
+        if (owner.username === DEFAULT_USERNAME && adminUsername !== DEFAULT_USERNAME) {
+            db.prepare(`UPDATE users SET username=? WHERE id=?`).run(adminUsername, owner.id);
+        }
+        if (!owner.password_hash) {
+            db.prepare(`UPDATE users SET password_hash=? WHERE id=?`).run(
+                hashPassword(adminPassword),
+                owner.id
+            );
+        }
+        db.prepare(`UPDATE users SET role='owner' WHERE id=?`).run(owner.id);
+    }
+
+    const demo = db.prepare(`SELECT id FROM users WHERE role='demo'`).get();
+    if (!demo) {
+        db.prepare(
+            `INSERT INTO users (username, password_hash, role, created_at) VALUES ('demo', NULL, 'demo', ?)`
+        ).run(now);
+    }
 }
