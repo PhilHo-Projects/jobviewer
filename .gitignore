@@ -4,6 +4,9 @@ node_modules/
 .DS_Store
 
 jobs.json
-data/*.json
+history.json
+scrape_info.json
+data/
+src/assets/identity.json
 dist/
 dist-server/
