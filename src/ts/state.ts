@@ -24,3 +24,16 @@ export function setOnConfirmProceed(cb: (() => void) | null) {
 export function getJobById(id: string): Job | undefined {
     return jobs.find(j => String(j.id) === String(id));
 }
+
+export let isOwner = false;
+export function setIsOwner(v: boolean) {
+    isOwner = v;
+}
+
+export let currentUser: { username: string | null; role: string | null } = {
+    username: null,
+    role: null,
+};
+export function setCurrentUser(u: { username: string | null; role: string | null }) {
+    currentUser = u;
+}
