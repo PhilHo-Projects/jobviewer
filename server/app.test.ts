@@ -117,6 +117,32 @@ async function ownerCookie(ctx: Awaited<ReturnType<typeof startApp>>): Promise<s
     return cookieFrom(login);
 }
 
+test('POST /jobs returns the exact created row even when other jobs exist', async () => {
+    const ctx = await startApp();
+    try {
+        const cookie = await ownerCookie(ctx);
+        // pre-seed jobs whose ids sort around the generated one, to expose any
+        // positional-lookup bug in the create handler
+        await fetch(`${ctx.base}/jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+            body: JSON.stringify({ id: 'zzz-last', title: 'Z', company: 'C' }),
+        });
+        await fetch(`${ctx.base}/jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+            body: JSON.stringify({ id: 'aaa-first', title: 'A', company: 'C' }),
+        });
+        const create = await fetch(`${ctx.base}/jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+            body: JSON.stringify({ title: 'BrandNew', company: 'NewCo' }),
+        });
+        assert.equal(create.status, 201);
+        const saved = await create.json();
+        assert.equal(saved.title, 'BrandNew');
+        assert.equal(saved.company, 'NewCo');
+        assert.ok(saved.id);
+    } finally { ctx.close(); }
+});
+
 test('write routes are 403 for anon and work for owner', async () => {
     const ctx = await startApp();
     try {

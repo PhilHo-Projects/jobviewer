@@ -42,7 +42,7 @@ const JOB_COLUMNS = [
     'statusSummaryUpdatedAt', 'appliedDate', 'scrapedDate', 'notes', 'summary', 'posted',
 ] as const;
 
-function createStableJobId(job: Partial<Job>): string {
+export function createStableJobId(job: Partial<Job>): string {
     const basis = [job.url, job.title, job.company, job.location, job.posted]
         .filter(Boolean)
         .join('|');

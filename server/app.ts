@@ -12,7 +12,7 @@ import {
     requireWebhookSecret,
     type AuthedRequest,
 } from './auth.js';
-import { getUserByUsername, getJobs, getHistory, getScrapeInfo, setScrapeInfo, getOwnerUser, upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus } from './repo.js';
+import { getUserByUsername, getJobs, getHistory, getScrapeInfo, setScrapeInfo, getOwnerUser, upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus, createStableJobId } from './repo.js';
 import type { Job } from '../shared/types.js';
 
 export interface AppOptions {
@@ -97,11 +97,12 @@ export function createApp(db: Db, opts: AppOptions): Express {
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
             return res.status(400).json({ error: 'Payload must be a job object' });
         }
-        const existed = !!(payload.id && getJobById(db, req.userId!, payload.id));
-        const all = upsertJobs(db, req.userId!, [payload as Partial<Job>]);
-        const saved = existed
-            ? getJobById(db, req.userId!, payload.id)
-            : all[all.length - 1];
+        // Resolve the id the same way upsertJobs will, so we can return the exact
+        // saved row (getJobs has no ORDER BY, so positional lookup is unreliable).
+        const id = payload.id || createStableJobId(payload as Partial<Job>);
+        const existed = !!getJobById(db, req.userId!, id);
+        upsertJobs(db, req.userId!, [payload as Partial<Job>]);
+        const saved = getJobById(db, req.userId!, id);
         return res.status(existed ? 200 : 201).json(saved);
     });
 
@@ -115,13 +116,13 @@ export function createApp(db: Db, opts: AppOptions): Express {
     });
 
     app.patch(`${BASE_PATH}/api/jobs/:id`, requireOwner, (req: AuthedRequest, res: Response) => {
-        const updated = patchJob(db, req.userId!, req.params.id, req.body || {});
+        const updated = patchJob(db, req.userId!, String(req.params.id), req.body || {});
         if (!updated) return res.status(404).json({ message: 'Job not found' });
         res.json(updated);
     });
 
     app.delete(`${BASE_PATH}/api/jobs/status/:status`, requireOwner, (req: AuthedRequest, res: Response) => {
-        const deleted = deleteByStatus(db, req.userId!, req.params.status);
+        const deleted = deleteByStatus(db, req.userId!, String(req.params.status));
         res.json({ deleted, remaining: getJobs(db, req.userId!).length });
     });
 
