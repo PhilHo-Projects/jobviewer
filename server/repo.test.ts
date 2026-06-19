@@ -141,6 +141,11 @@ test('bulkMove and deleteByStatus are user-scoped', () => {
 });
 
 import { getHistory, getScrapeInfo, setScrapeInfo, insertHistory } from './repo.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { migrateFromJson } from './db.js';
+import { getJobs as repoGetJobs } from './repo.js';
 
 test('history is user-scoped', () => {
     const db = seededDb();
@@ -163,4 +168,31 @@ test('scrape_info round-trips per user', () => {
     setScrapeInfo(db, owner.id, '2026-06-18');
     assert.deepEqual(getScrapeInfo(db, owner.id), { lastTriggerDate: '2026-06-18' });
     db.close();
+});
+
+test('migrateFromJson imports legacy json into the owner once', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jv-migrate-'));
+    fs.writeFileSync(path.join(dir, 'jobs.json'), JSON.stringify([
+        { id: 'm1', title: 'Migrated', company: 'Old', status: 'in_progress' },
+    ]));
+    fs.writeFileSync(path.join(dir, 'history.json'), JSON.stringify([
+        { date: '2026-05-01', wins: [], basePoints: 1, scoreMultiplier: 1, totalPoints: 1 },
+    ]));
+    fs.writeFileSync(path.join(dir, 'scrape_info.json'), JSON.stringify({ lastTriggerDate: '2026-05-02' }));
+    try {
+        const db = openDb(':memory:');
+        seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
+        const owner = getOwnerUser(db)!;
+
+        migrateFromJson(db, owner.id, dir);
+        assert.equal(repoGetJobs(db, owner.id).length, 1);
+        assert.equal(getHistory(db, owner.id).length, 1);
+        assert.equal(getScrapeInfo(db, owner.id).lastTriggerDate, '2026-05-02');
+
+        migrateFromJson(db, owner.id, dir);
+        assert.equal(repoGetJobs(db, owner.id).length, 1);
+        db.close();
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 });

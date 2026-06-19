@@ -2,6 +2,8 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { hashPassword } from './auth.js';
+import { upsertJobs, insertHistory, setScrapeInfo, getJobs } from './repo.js';
+import type { Job, HistoryEntry } from '../shared/types.js';
 
 export type Db = Database.Database;
 
@@ -101,4 +103,36 @@ export function seedUsers(db: Db, opts: SeedOptions = {}): void {
             `INSERT INTO users (username, password_hash, role, created_at) VALUES ('demo', NULL, 'demo', ?)`
         ).run(now);
     }
+}
+
+function readJsonFile<T>(filePath: string, fallback: T): T {
+    try {
+        if (!fs.existsSync(filePath)) return fallback;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        if (!raw) return fallback;
+        return JSON.parse(raw) as T;
+    } catch {
+        return fallback;
+    }
+}
+
+/** One-time, idempotent import of the legacy flat-JSON files into the owner's rows. */
+export function migrateFromJson(db: Db, ownerId: number, cwd: string): void {
+    if (getJobs(db, ownerId).length > 0) return; // already migrated / has data
+
+    const jobs = readJsonFile<Job[]>(path.join(cwd, 'jobs.json'), []);
+    if (Array.isArray(jobs) && jobs.length > 0) {
+        upsertJobs(db, ownerId, jobs);
+    }
+
+    const history = readJsonFile<HistoryEntry[]>(path.join(cwd, 'history.json'), []);
+    if (Array.isArray(history)) {
+        for (const entry of history) insertHistory(db, ownerId, entry);
+    }
+
+    const scrape = readJsonFile<{ lastTriggerDate: string | null }>(
+        path.join(cwd, 'scrape_info.json'),
+        { lastTriggerDate: null }
+    );
+    if (scrape && scrape.lastTriggerDate) setScrapeInfo(db, ownerId, scrape.lastTriggerDate);
 }
