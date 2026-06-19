@@ -10,7 +10,7 @@ import {
     buildClearCookie,
     type AuthedRequest,
 } from './auth.js';
-import { getUserByUsername } from './repo.js';
+import { getUserByUsername, getJobs, getHistory, getScrapeInfo } from './repo.js';
 
 export interface AppOptions {
     secret: string;
@@ -70,6 +70,19 @@ export function createApp(db: Db, opts: AppOptions): Express {
     app.post(`${BASE_PATH}/api/logout`, (_req: Request, res: Response) => {
         res.setHeader('Set-Cookie', buildClearCookie(BASE_PATH));
         res.json({ ok: true });
+    });
+
+    // --- Scoped read routes (owner sees real data, anon sees demo) ---
+    app.get(`${BASE_PATH}/api/jobs`, (req: AuthedRequest, res: Response) => {
+        res.json(getJobs(db, req.userId!));
+    });
+
+    app.get(`${BASE_PATH}/api/history`, (req: AuthedRequest, res: Response) => {
+        res.json(getHistory(db, req.userId!));
+    });
+
+    app.get(`${BASE_PATH}/api/scrape-info`, (req: AuthedRequest, res: Response) => {
+        res.json(getScrapeInfo(db, req.userId!));
     });
 
     return app;

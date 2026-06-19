@@ -83,3 +83,28 @@ test('logout clears the cookie', async () => {
         assert.match(res.headers.get('set-cookie') || '', /Max-Age=0/);
     } finally { ctx.close(); }
 });
+
+import { getOwnerUser, getDemoUser, upsertJobs } from './repo.js';
+
+test('GET /jobs returns demo jobs for anon and owner jobs for owner', async () => {
+    const ctx = await startApp();
+    try {
+        const owner = getOwnerUser(ctx.db)!;
+        const demo = getDemoUser(ctx.db)!;
+        upsertJobs(ctx.db, owner.id, [{ id: 'o1', title: 'Owner Secret', company: 'Real' }]);
+        upsertJobs(ctx.db, demo.id, [{ id: 'd1', title: 'Demo Sample', company: 'Fake' }]);
+
+        const anon = await (await fetch(`${ctx.base}/jobs`)).json();
+        assert.equal(anon.length, 1);
+        assert.equal(anon[0].title, 'Demo Sample');
+
+        const login = await fetch(`${ctx.base}/login`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'me', password: '0000' }),
+        });
+        const cookie = cookieFrom(login);
+        const mine = await (await fetch(`${ctx.base}/jobs`, { headers: { Cookie: cookie } })).json();
+        assert.equal(mine.length, 1);
+        assert.equal(mine[0].title, 'Owner Secret');
+    } finally { ctx.close(); }
+});
