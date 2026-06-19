@@ -9,9 +9,10 @@ import {
     buildSessionCookie,
     buildClearCookie,
     requireOwner,
+    requireWebhookSecret,
     type AuthedRequest,
 } from './auth.js';
-import { getUserByUsername, getJobs, getHistory, getScrapeInfo, upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus } from './repo.js';
+import { getUserByUsername, getJobs, getHistory, getScrapeInfo, setScrapeInfo, getOwnerUser, upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus } from './repo.js';
 import type { Job } from '../shared/types.js';
 
 export interface AppOptions {
@@ -20,6 +21,22 @@ export interface AppOptions {
 }
 
 const BASE_PATH = '/job-viewer';
+
+function loadIdentity(dataDir: string): unknown {
+    const candidates = [
+        process.env.IDENTITY_PATH,
+        path.join(dataDir, 'identity.json'),
+        path.join(process.cwd(), 'src', 'assets', 'identity.json'),
+    ].filter(Boolean) as string[];
+    for (const p of candidates) {
+        try {
+            if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+        } catch {
+            /* try next */
+        }
+    }
+    return {};
+}
 
 export function createApp(db: Db, opts: AppOptions): Express {
     const app = express();
@@ -119,6 +136,57 @@ export function createApp(db: Db, opts: AppOptions): Express {
 
     app.get(`${BASE_PATH}/api/scrape-info`, (req: AuthedRequest, res: Response) => {
         res.json(getScrapeInfo(db, req.userId!));
+    });
+
+    // --- Owner-only n8n integrations ---
+    app.post(`${BASE_PATH}/api/trigger-scrape`, requireOwner, async (req: AuthedRequest, res: Response) => {
+        const webhookUrl = process.env.N8N_SCRAPE_URL;
+        if (!webhookUrl) return res.status(500).json({ error: 'N8N_SCRAPE_URL is not configured' });
+
+        const info = getScrapeInfo(db, req.userId!);
+        const today = new Date().toISOString().split('T')[0];
+        if (info.lastTriggerDate === today) {
+            return res.status(429).json({ error: 'Scrape already triggered today. Limit: 1 per day.' });
+        }
+        try {
+            const response = await fetch(webhookUrl, { method: 'GET' });
+            if (!response.ok) throw new Error(`n8n responded with status: ${response.status}`);
+            setScrapeInfo(db, req.userId!, today);
+            res.json({ message: 'Scrape triggered successfully', lastTriggerDate: today });
+        } catch (err: any) {
+            console.error('Failed to trigger n8n:', err);
+            res.status(500).json({ error: `Failed to trigger n8n: ${err.message}` });
+        }
+    });
+
+    app.post(`${BASE_PATH}/api/generate-cover-letter`, requireOwner, async (req: Request, res: Response) => {
+        const webhookUrl = process.env.N8N_COVER_LETTER_URL;
+        if (!webhookUrl) return res.status(500).json({ error: 'N8N_COVER_LETTER_URL is not configured' });
+        try {
+            const { job } = req.body || {};
+            const identity = loadIdentity(opts.dataDir);
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job, identity }),
+            });
+            if (!response.ok) throw new Error(`n8n responded with status: ${response.status}`);
+
+            const rawText = await response.text();
+            let result: any;
+            try {
+                result = JSON.parse(rawText);
+            } catch {
+                throw new Error(`n8n returned invalid JSON. Raw: "${rawText.slice(0, 200)}"`);
+            }
+            const text = Array.isArray(result)
+                ? (result[0]?.text ?? JSON.stringify(result[0]))
+                : (result?.text ?? JSON.stringify(result));
+            res.json({ text });
+        } catch (err: any) {
+            console.error('Failed to generate cover letter via n8n:', err);
+            res.status(500).json({ error: `Failed to generate cover letter: ${err.message}` });
+        }
     });
 
     return app;

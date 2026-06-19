@@ -162,3 +162,62 @@ test('receive-jobs path is registered but bulk routes need owner', async () => {
         assert.equal(anonDelete.status, 403);
     } finally { ctx.close(); }
 });
+
+import express from 'express';
+
+async function startStub() {
+    const stub = express();
+    stub.use(express.json());
+    stub.all('*', (_req, res) => {
+        res.json({ text: 'STUB COVER LETTER' });
+    });
+    const server = stub.listen(0);
+    await once(server, 'listening');
+    const { port } = server.address() as AddressInfo;
+    return { url: `http://127.0.0.1:${port}/hook`, close: () => server.close() };
+}
+
+test('trigger-scrape is owner-only and honours the daily limit', async () => {
+    const ctx = await startApp();
+    const stub = await startStub();
+    const prev = process.env.N8N_SCRAPE_URL;
+    process.env.N8N_SCRAPE_URL = stub.url;
+    try {
+        const anon = await fetch(`${ctx.base}/trigger-scrape`, { method: 'POST' });
+        assert.equal(anon.status, 403);
+
+        const cookie = await ownerCookie(ctx);
+        const first = await fetch(`${ctx.base}/trigger-scrape`, { method: 'POST', headers: { Cookie: cookie } });
+        assert.equal(first.status, 200);
+        const second = await fetch(`${ctx.base}/trigger-scrape`, { method: 'POST', headers: { Cookie: cookie } });
+        assert.equal(second.status, 429);
+    } finally {
+        if (prev === undefined) delete process.env.N8N_SCRAPE_URL; else process.env.N8N_SCRAPE_URL = prev;
+        stub.close(); ctx.close();
+    }
+});
+
+test('generate-cover-letter is owner-only', async () => {
+    const ctx = await startApp();
+    const stub = await startStub();
+    const prev = process.env.N8N_COVER_LETTER_URL;
+    process.env.N8N_COVER_LETTER_URL = stub.url;
+    try {
+        const anon = await fetch(`${ctx.base}/generate-cover-letter`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job: { title: 'T' } }),
+        });
+        assert.equal(anon.status, 403);
+
+        const cookie = await ownerCookie(ctx);
+        const ok = await fetch(`${ctx.base}/generate-cover-letter`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+            body: JSON.stringify({ job: { title: 'T' } }),
+        });
+        assert.equal(ok.status, 200);
+        assert.equal((await ok.json()).text, 'STUB COVER LETTER');
+    } finally {
+        if (prev === undefined) delete process.env.N8N_COVER_LETTER_URL; else process.env.N8N_COVER_LETTER_URL = prev;
+        stub.close(); ctx.close();
+    }
+});
