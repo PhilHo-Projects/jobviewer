@@ -221,3 +221,53 @@ test('generate-cover-letter is owner-only', async () => {
         stub.close(); ctx.close();
     }
 });
+
+test('receive-jobs requires the webhook secret and writes to the owner', async () => {
+    const ctx = await startApp();
+    const prev = process.env.WEBHOOK_SECRET;
+    process.env.WEBHOOK_SECRET = 's3cr3t';
+    try {
+        const noSecret = await fetch(`${ctx.base}/receive-jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([{ title: 'Hook Job', company: 'C' }]),
+        });
+        assert.equal(noSecret.status, 403);
+
+        const wrong = await fetch(`${ctx.base}/receive-jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 'nope' },
+            body: JSON.stringify([{ title: 'Hook Job', company: 'C' }]),
+        });
+        assert.equal(wrong.status, 403);
+
+        const ok = await fetch(`${ctx.base}/receive-jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 's3cr3t' },
+            body: JSON.stringify([{ title: 'Hook Job', company: 'C' }]),
+        });
+        assert.equal(ok.status, 201);
+
+        const cookie = await ownerCookie(ctx);
+        const owner = await (await fetch(`${ctx.base}/jobs`, { headers: { Cookie: cookie } })).json();
+        assert.ok(owner.some((j: any) => j.title === 'Hook Job'));
+        const anon = await (await fetch(`${ctx.base}/jobs`)).json();
+        assert.ok(!anon.some((j: any) => j.title === 'Hook Job'));
+    } finally {
+        if (prev === undefined) delete process.env.WEBHOOK_SECRET; else process.env.WEBHOOK_SECRET = prev;
+        ctx.close();
+    }
+});
+
+test('receive-jobs fails closed when WEBHOOK_SECRET is unset', async () => {
+    const ctx = await startApp();
+    const prev = process.env.WEBHOOK_SECRET;
+    delete process.env.WEBHOOK_SECRET;
+    try {
+        const res = await fetch(`${ctx.base}/receive-jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 'anything' },
+            body: JSON.stringify([{ title: 'X', company: 'C' }]),
+        });
+        assert.equal(res.status, 403);
+    } finally {
+        if (prev !== undefined) process.env.WEBHOOK_SECRET = prev;
+        ctx.close();
+    }
+});

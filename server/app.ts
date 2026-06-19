@@ -189,5 +189,23 @@ export function createApp(db: Db, opts: AppOptions): Express {
         }
     });
 
+    // --- Inbound delivery from n8n (server-to-server, shared secret) ---
+    app.post(`${BASE_PATH}/api/receive-jobs`, requireWebhookSecret, (req: Request, res: Response) => {
+        const payload = req.body;
+        if (!Array.isArray(payload)) {
+            return res.status(400).json({ error: 'Payload must be an array of jobs' });
+        }
+        const owner = getOwnerUser(db);
+        if (!owner) return res.status(500).json({ error: 'No owner configured' });
+        const incoming = payload.filter(Boolean);
+        const before = getJobs(db, owner.id).length;
+        upsertJobs(db, owner.id, incoming);
+        const after = getJobs(db, owner.id).length;
+        return res.status(201).json({
+            message: 'Jobs received successfully',
+            received: incoming.length, before, after,
+        });
+    });
+
     return app;
 }
