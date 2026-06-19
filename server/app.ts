@@ -8,9 +8,11 @@ import {
     verifyPassword,
     buildSessionCookie,
     buildClearCookie,
+    requireOwner,
     type AuthedRequest,
 } from './auth.js';
-import { getUserByUsername, getJobs, getHistory, getScrapeInfo } from './repo.js';
+import { getUserByUsername, getJobs, getHistory, getScrapeInfo, upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus } from './repo.js';
+import type { Job } from '../shared/types.js';
 
 export interface AppOptions {
     secret: string;
@@ -70,6 +72,40 @@ export function createApp(db: Db, opts: AppOptions): Express {
     app.post(`${BASE_PATH}/api/logout`, (_req: Request, res: Response) => {
         res.setHeader('Set-Cookie', buildClearCookie(BASE_PATH));
         res.json({ ok: true });
+    });
+
+    // --- Owner-only write routes ---
+    app.post(`${BASE_PATH}/api/jobs`, requireOwner, (req: AuthedRequest, res: Response) => {
+        const payload = req.body;
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            return res.status(400).json({ error: 'Payload must be a job object' });
+        }
+        const existed = !!(payload.id && getJobById(db, req.userId!, payload.id));
+        const all = upsertJobs(db, req.userId!, [payload as Partial<Job>]);
+        const saved = existed
+            ? getJobById(db, req.userId!, payload.id)
+            : all[all.length - 1];
+        return res.status(existed ? 200 : 201).json(saved);
+    });
+
+    app.patch(`${BASE_PATH}/api/jobs/bulk-move`, requireOwner, (req: AuthedRequest, res: Response) => {
+        const { from, to } = req.body || {};
+        if (!from || !to) {
+            return res.status(400).json({ error: 'Source (from) and target (to) statuses are required' });
+        }
+        const moved = bulkMove(db, req.userId!, from, to);
+        res.json({ moved, from, to });
+    });
+
+    app.patch(`${BASE_PATH}/api/jobs/:id`, requireOwner, (req: AuthedRequest, res: Response) => {
+        const updated = patchJob(db, req.userId!, req.params.id, req.body || {});
+        if (!updated) return res.status(404).json({ message: 'Job not found' });
+        res.json(updated);
+    });
+
+    app.delete(`${BASE_PATH}/api/jobs/status/:status`, requireOwner, (req: AuthedRequest, res: Response) => {
+        const deleted = deleteByStatus(db, req.userId!, req.params.status);
+        res.json({ deleted, remaining: getJobs(db, req.userId!).length });
     });
 
     // --- Scoped read routes (owner sees real data, anon sees demo) ---

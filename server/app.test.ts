@@ -108,3 +108,57 @@ test('GET /jobs returns demo jobs for anon and owner jobs for owner', async () =
         assert.equal(mine[0].title, 'Owner Secret');
     } finally { ctx.close(); }
 });
+
+async function ownerCookie(ctx: Awaited<ReturnType<typeof startApp>>): Promise<string> {
+    const login = await fetch(`${ctx.base}/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'me', password: '0000' }),
+    });
+    return cookieFrom(login);
+}
+
+test('write routes are 403 for anon and work for owner', async () => {
+    const ctx = await startApp();
+    try {
+        const anonCreate = await fetch(`${ctx.base}/jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: 'X', company: 'Y' }),
+        });
+        assert.equal(anonCreate.status, 403);
+
+        const cookie = await ownerCookie(ctx);
+        const create = await fetch(`${ctx.base}/jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+            body: JSON.stringify({ title: 'X', company: 'Y' }),
+        });
+        assert.equal(create.status, 201);
+        const saved = await create.json();
+        assert.ok(saved.id);
+
+        const patch = await fetch(`${ctx.base}/jobs/${saved.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json', Cookie: cookie },
+            body: JSON.stringify({ status: 'completed' }),
+        });
+        assert.equal(patch.status, 200);
+        assert.equal((await patch.json()).status, 'completed');
+
+        const anonPatch = await fetch(`${ctx.base}/jobs/${saved.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'new' }),
+        });
+        assert.equal(anonPatch.status, 403);
+    } finally { ctx.close(); }
+});
+
+test('receive-jobs path is registered but bulk routes need owner', async () => {
+    const ctx = await startApp();
+    try {
+        const anonBulk = await fetch(`${ctx.base}/jobs/bulk-move`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: 'new', to: 'deleted' }),
+        });
+        assert.equal(anonBulk.status, 403);
+        const anonDelete = await fetch(`${ctx.base}/jobs/status/deleted`, { method: 'DELETE' });
+        assert.equal(anonDelete.status, 403);
+    } finally { ctx.close(); }
+});
