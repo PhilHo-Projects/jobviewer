@@ -62,3 +62,45 @@ export function verifySessionToken(token: string, secret: string): { userId: num
     if (!Number.isInteger(userId)) return null;
     return { userId };
 }
+
+export const COOKIE_NAME = 'jv_session';
+
+export function loadOrCreateSecret(dataDir: string): string {
+    if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+    const secretPath = path.join(dataDir, 'session.secret');
+    if (fs.existsSync(secretPath)) {
+        const existing = fs.readFileSync(secretPath, 'utf8').trim();
+        if (existing) return existing;
+    }
+    const secret = crypto.randomBytes(32).toString('hex');
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(secretPath, secret, 'utf8');
+    return secret;
+}
+
+export function parseCookies(header: string | undefined): Record<string, string> {
+    const out: Record<string, string> = {};
+    if (!header) return out;
+    for (const part of header.split(';')) {
+        const idx = part.indexOf('=');
+        if (idx === -1) continue;
+        const k = part.slice(0, idx).trim();
+        const v = part.slice(idx + 1).trim();
+        if (k) out[k] = decodeURIComponent(v);
+    }
+    return out;
+}
+
+function cookieFlags(basePath: string): string {
+    const secure = process.env.NODE_ENV === 'production' ? ' Secure;' : '';
+    return ` HttpOnly; SameSite=Lax;${secure} Path=${basePath}`;
+}
+
+export function buildSessionCookie(token: string, basePath: string): string {
+    const maxAge = Math.floor(SESSION_TTL_MS / 1000);
+    return `${COOKIE_NAME}=${token};${cookieFlags(basePath)}; Max-Age=${maxAge}`;
+}
+
+export function buildClearCookie(basePath: string): string {
+    return `${COOKIE_NAME}=;${cookieFlags(basePath)}; Max-Age=0`;
+}
