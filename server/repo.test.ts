@@ -101,6 +101,16 @@ test('upsertJobs merges existing rows without clobbering status/notes', () => {
     db.close();
 });
 
+test('upsertJobs does not resurrect notes the owner deliberately cleared', () => {
+    const db = seededDb();
+    const owner = getOwnerUser(db)!;
+    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', notes: '' }]);
+    // a re-delivered job that carries notes must NOT overwrite the owner's empty notes
+    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', notes: 'from scraper' }]);
+    assert.equal(getJobById(db, owner.id, 'j1')!.notes, '');
+    db.close();
+});
+
 test('patchJob updates only the given fields and is user-scoped', () => {
     const db = seededDb();
     const owner = getOwnerUser(db)!;

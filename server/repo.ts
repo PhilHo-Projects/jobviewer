@@ -71,7 +71,10 @@ function mergeJob(existing: Job, incoming: Job): Job {
         ...incoming,
         status: existing.status || incoming.status || 'new',
         statusSummary: existing.statusSummary || incoming.statusSummary || 'New Job',
-        notes: typeof existing.notes === 'string' && existing.notes !== ''
+        // Preserve the owner's notes whenever they exist as a string — including a
+        // deliberately-cleared '' — matching the proven legacy contract. A re-delivered
+        // job must never resurrect or overwrite notes the owner controls.
+        notes: typeof existing.notes === 'string'
             ? existing.notes
             : (typeof incoming.notes === 'string' ? incoming.notes : ''),
         scrapedDate: existing.scrapedDate || incoming.scrapedDate,
