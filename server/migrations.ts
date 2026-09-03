@@ -44,6 +44,87 @@ export const MIGRATIONS: Migration[] = [
             );
         `,
     },
+    // Better Auth 1.7.1's own schema. Verified against `getMigrations()` output for
+    // this app's exact option set — every table, column and index below matches what
+    // the library generates, including `rateLimit`, which only appears when
+    // `rateLimit.storage` is 'database'.
+    //
+    // Do NOT regenerate this with `@better-auth/cli`: that package is deprecated and
+    // pinned at 1.4.21, and the schema it emits has no `account.issuer` column, which
+    // makes sign-up fail at runtime with "table account has no column named issuer".
+    //
+    // Its identifiers are camelCase and double-quoted while ours are snake_case. Both
+    // are correct — `user` is also a SQL reserved word, so it must stay quoted.
+    {
+        version: 2,
+        sql: `
+            CREATE TABLE "user" (
+                "id" text NOT NULL PRIMARY KEY,
+                "name" text NOT NULL,
+                "email" text NOT NULL UNIQUE,
+                "emailVerified" integer NOT NULL,
+                "image" text,
+                "createdAt" date NOT NULL,
+                "updatedAt" date NOT NULL,
+                "username" text UNIQUE,
+                "displayUsername" text,
+                "role" text NOT NULL,
+                "approvalStatus" text NOT NULL,
+                "approvedAt" text,
+                "approvedBy" text
+            );
+
+            CREATE TABLE "session" (
+                "id" text NOT NULL PRIMARY KEY,
+                "expiresAt" date NOT NULL,
+                "token" text NOT NULL UNIQUE,
+                "createdAt" date NOT NULL,
+                "updatedAt" date NOT NULL,
+                "ipAddress" text,
+                "userAgent" text,
+                "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE
+            );
+
+            CREATE TABLE "account" (
+                "id" text NOT NULL PRIMARY KEY,
+                "issuer" text NOT NULL,
+                "accountId" text NOT NULL,
+                "providerId" text NOT NULL,
+                "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+                "accessToken" text,
+                "refreshToken" text,
+                "idToken" text,
+                "accessTokenExpiresAt" date,
+                "refreshTokenExpiresAt" date,
+                "scope" text,
+                "password" text,
+                "createdAt" date NOT NULL,
+                "updatedAt" date NOT NULL
+            );
+
+            CREATE TABLE "verification" (
+                "id" text NOT NULL PRIMARY KEY,
+                "identifier" text NOT NULL,
+                "value" text NOT NULL,
+                "expiresAt" date NOT NULL,
+                "createdAt" date NOT NULL,
+                "updatedAt" date NOT NULL
+            );
+
+            CREATE TABLE "rateLimit" (
+                "id" text NOT NULL PRIMARY KEY,
+                "key" text NOT NULL UNIQUE,
+                "count" integer NOT NULL,
+                "lastRequest" bigint NOT NULL
+            );
+
+            CREATE INDEX "session_userId_idx" ON "session" ("userId");
+            CREATE INDEX "account_userId_idx" ON "account" ("userId");
+            CREATE INDEX "verification_identifier_idx" ON "verification" ("identifier");
+            CREATE UNIQUE INDEX "account_issuer_accountId_uidx"
+                ON "account" ("issuer", "accountId");
+        `,
+    },
 ];
 
 export function appliedVersions(db: Db): number[] {

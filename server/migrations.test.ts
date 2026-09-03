@@ -47,3 +47,38 @@ test('migrate records version 1 against a database that already has the tables',
     assert.ok(appliedVersions(db).includes(1));
     db.close();
 });
+
+function columnNames(db: Database.Database, table: string): string[] {
+    return db.prepare(`PRAGMA table_info("${table}")`).all().map((r: any) => r.name);
+}
+
+test('migration 2 creates the Better Auth tables', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    const names = tableNames(db);
+    for (const t of ['user', 'session', 'account', 'verification', 'rateLimit']) {
+        assert.ok(names.includes(t), `missing table ${t}`);
+    }
+    assert.ok(appliedVersions(db).includes(2));
+    db.close();
+});
+
+test('the account table has an issuer column', () => {
+    // The deprecated @better-auth/cli omits this column, and without it sign-up fails
+    // at runtime under better-auth 1.7.1 with "table account has no column named
+    // issuer". Pinned so a future regeneration cannot quietly drop it.
+    const db = new Database(':memory:');
+    migrate(db);
+    assert.ok(columnNames(db, 'account').includes('issuer'));
+    db.close();
+});
+
+test('the user table carries the server-owned approval fields', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    const cols = columnNames(db, 'user');
+    for (const c of ['role', 'approvalStatus', 'approvedAt', 'approvedBy']) {
+        assert.ok(cols.includes(c), `missing user column ${c}`);
+    }
+    db.close();
+});
