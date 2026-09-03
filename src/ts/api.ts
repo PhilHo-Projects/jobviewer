@@ -4,7 +4,7 @@ import { setStatus, renderError } from './dom';
 import { renderBoard } from './components/board';
 import { calculateAndRefreshScore } from './components/score';
 
-const API_BASE = '/job-viewer/api';
+const API_BASE = '/api';
 
 export interface MeResponse {
     authenticated: boolean;

@@ -13,7 +13,7 @@ async function startApp() {
     const server = app.listen(0);
     await once(server, 'listening');
     const { port } = server.address() as AddressInfo;
-    const base = `http://127.0.0.1:${port}/job-viewer/api`;
+    const base = `http://127.0.0.1:${port}/api`;
     return { db, server, base, close: () => { server.close(); db.close(); } };
 }
 

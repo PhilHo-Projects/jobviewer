@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-    base: '/job-viewer/',
+    base: '/',
     server: {
         proxy: {
-            '/job-viewer/api': {
+            '/api': {
                 target: 'http://localhost:3004',
                 changeOrigin: true,
             },

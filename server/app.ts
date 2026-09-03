@@ -20,8 +20,6 @@ export interface AppOptions {
     dataDir: string;
 }
 
-const BASE_PATH = '/job-viewer';
-
 function loadIdentity(dataDir: string): unknown {
     const candidates = [
         process.env.IDENTITY_PATH,
@@ -52,9 +50,9 @@ export function createApp(db: Db, opts: AppOptions): Express {
 
     const distPath = path.join(process.cwd(), 'dist');
     if (fs.existsSync(distPath)) {
-        app.use(BASE_PATH, express.static(distPath));
-        app.get(`${BASE_PATH}/*`, (req: Request, res: Response, next: NextFunction) => {
-            if (req.path.startsWith(`${BASE_PATH}/api`)) return next();
+        app.use(express.static(distPath));
+        app.get('*', (req: Request, res: Response, next: NextFunction) => {
+            if (req.path.startsWith('/api')) return next();
             res.sendFile(path.join(distPath, 'index.html'));
         });
     }
@@ -62,7 +60,7 @@ export function createApp(db: Db, opts: AppOptions): Express {
     app.use(attachUser(db, opts.secret));
 
     // --- Auth routes ---
-    app.get(`${BASE_PATH}/api/me`, (req: AuthedRequest, res: Response) => {
+    app.get('/api/me', (req: AuthedRequest, res: Response) => {
         const user = req.user;
         res.json({
             authenticated: user?.role === 'owner',
@@ -72,7 +70,7 @@ export function createApp(db: Db, opts: AppOptions): Express {
         });
     });
 
-    app.post(`${BASE_PATH}/api/login`, (req: Request, res: Response) => {
+    app.post('/api/login', (req: Request, res: Response) => {
         const { username, password } = req.body || {};
         if (typeof username !== 'string' || typeof password !== 'string') {
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -82,17 +80,17 @@ export function createApp(db: Db, opts: AppOptions): Express {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         const token = createSessionToken(user.id, opts.secret);
-        res.setHeader('Set-Cookie', buildSessionCookie(token, BASE_PATH));
+        res.setHeader('Set-Cookie', buildSessionCookie(token, '/'));
         res.json({ username: user.username, role: user.role });
     });
 
-    app.post(`${BASE_PATH}/api/logout`, (_req: Request, res: Response) => {
-        res.setHeader('Set-Cookie', buildClearCookie(BASE_PATH));
+    app.post('/api/logout', (_req: Request, res: Response) => {
+        res.setHeader('Set-Cookie', buildClearCookie('/'));
         res.json({ ok: true });
     });
 
     // --- Owner-only write routes ---
-    app.post(`${BASE_PATH}/api/jobs`, requireOwner, (req: AuthedRequest, res: Response) => {
+    app.post('/api/jobs', requireOwner, (req: AuthedRequest, res: Response) => {
         const payload = req.body;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
             return res.status(400).json({ error: 'Payload must be a job object' });
@@ -106,7 +104,7 @@ export function createApp(db: Db, opts: AppOptions): Express {
         return res.status(existed ? 200 : 201).json(saved);
     });
 
-    app.patch(`${BASE_PATH}/api/jobs/bulk-move`, requireOwner, (req: AuthedRequest, res: Response) => {
+    app.patch('/api/jobs/bulk-move', requireOwner, (req: AuthedRequest, res: Response) => {
         const { from, to } = req.body || {};
         if (!from || !to) {
             return res.status(400).json({ error: 'Source (from) and target (to) statuses are required' });
@@ -115,32 +113,32 @@ export function createApp(db: Db, opts: AppOptions): Express {
         res.json({ moved, from, to });
     });
 
-    app.patch(`${BASE_PATH}/api/jobs/:id`, requireOwner, (req: AuthedRequest, res: Response) => {
+    app.patch('/api/jobs/:id', requireOwner, (req: AuthedRequest, res: Response) => {
         const updated = patchJob(db, req.userId!, String(req.params.id), req.body || {});
         if (!updated) return res.status(404).json({ message: 'Job not found' });
         res.json(updated);
     });
 
-    app.delete(`${BASE_PATH}/api/jobs/status/:status`, requireOwner, (req: AuthedRequest, res: Response) => {
+    app.delete('/api/jobs/status/:status', requireOwner, (req: AuthedRequest, res: Response) => {
         const deleted = deleteByStatus(db, req.userId!, String(req.params.status));
         res.json({ deleted, remaining: getJobs(db, req.userId!).length });
     });
 
     // --- Scoped read routes (owner sees real data, anon sees demo) ---
-    app.get(`${BASE_PATH}/api/jobs`, (req: AuthedRequest, res: Response) => {
+    app.get('/api/jobs', (req: AuthedRequest, res: Response) => {
         res.json(getJobs(db, req.userId!));
     });
 
-    app.get(`${BASE_PATH}/api/history`, (req: AuthedRequest, res: Response) => {
+    app.get('/api/history', (req: AuthedRequest, res: Response) => {
         res.json(getHistory(db, req.userId!));
     });
 
-    app.get(`${BASE_PATH}/api/scrape-info`, (req: AuthedRequest, res: Response) => {
+    app.get('/api/scrape-info', (req: AuthedRequest, res: Response) => {
         res.json(getScrapeInfo(db, req.userId!));
     });
 
     // --- Owner-only n8n integrations ---
-    app.post(`${BASE_PATH}/api/trigger-scrape`, requireOwner, async (req: AuthedRequest, res: Response) => {
+    app.post('/api/trigger-scrape', requireOwner, async (req: AuthedRequest, res: Response) => {
         const webhookUrl = process.env.N8N_SCRAPE_URL;
         if (!webhookUrl) return res.status(500).json({ error: 'N8N_SCRAPE_URL is not configured' });
 
@@ -160,7 +158,7 @@ export function createApp(db: Db, opts: AppOptions): Express {
         }
     });
 
-    app.post(`${BASE_PATH}/api/generate-cover-letter`, requireOwner, async (req: Request, res: Response) => {
+    app.post('/api/generate-cover-letter', requireOwner, async (req: Request, res: Response) => {
         const webhookUrl = process.env.N8N_COVER_LETTER_URL;
         if (!webhookUrl) return res.status(500).json({ error: 'N8N_COVER_LETTER_URL is not configured' });
         try {
@@ -191,7 +189,7 @@ export function createApp(db: Db, opts: AppOptions): Express {
     });
 
     // --- Inbound delivery from n8n (server-to-server, shared secret) ---
-    app.post(`${BASE_PATH}/api/receive-jobs`, requireWebhookSecret, (req: Request, res: Response) => {
+    app.post('/api/receive-jobs', requireWebhookSecret, (req: Request, res: Response) => {
         const payload = req.body;
         if (!Array.isArray(payload)) {
             return res.status(400).json({ error: 'Payload must be an array of jobs' });
