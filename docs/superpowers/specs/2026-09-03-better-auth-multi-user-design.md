@@ -1,7 +1,7 @@
 # Better Auth Migration + Multi-User Accounts — Design
 
 **Date:** 2026-09-03
-**Status:** Approved (pending spec review)
+**Status:** Implemented 2026-09-04 (Tasks 1-14)
 **App:** job-viewer (job tracker fed by an n8n/Apify scraper)
 **Supersedes the auth portions of:** `2026-06-18-owner-auth-public-showcase-design.md`
 
@@ -340,6 +340,10 @@ unnoticed and silently fell back to a generated file.
 
 ## 10. Deployment
 
+job-viewer is a Coolify **service**, not an application — the applications API 404s on
+its UUID (`l4eas83izr96sj3q9hmdgln9`). Env vars and deploys go through
+`/api/v1/services/<uuid>/envs` and `POST /api/v1/deploy?uuid=<uuid>`.
+
 Data is a bind mount: `/home/phil/projects/job-viewer-runtime` → `/app/data`. It is
 persistent and survives redeploys.
 
@@ -349,7 +353,9 @@ persistent and survives redeploys.
 
 Ordered cutover:
 
-1. `sqlite3 /home/phil/projects/job-viewer-runtime/jobviewer.db ".backup /tmp/pre-auth.db"`.
+1. Back up with `VACUUM INTO` through the container's own better-sqlite3 (the host has
+   no `sqlite3` binary):
+   `docker exec <container> node -e "new (require('better-sqlite3'))('/app/data/jobviewer.db').exec(\"VACUUM INTO '/app/data/backup.db'\")"`
 2. Set the new environment in Coolify; deploy.
 3. Confirm from the logs that migrations 1–3 applied, `ensureOwner` seeded the owner,
    and the legacy backfill moved the owner's rows exactly once.

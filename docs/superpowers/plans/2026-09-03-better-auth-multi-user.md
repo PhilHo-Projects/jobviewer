@@ -1676,10 +1676,26 @@ app.get('/api/me', (req: AuthedRequest, res: Response) => {
 });
 ```
 
-The `express.json({ limit: '50mb' })` line is gone; add a route-local parser on `receive-jobs` only:
+The `express.json({ limit: '50mb' })` line is gone. `receive-jobs` still needs a larger
+body than 1mb, and a route-local parser will **not** work if the global one runs first:
+the global 1mb parser would reject an oversized batch before the route ever sees it, and
+on a normal batch the body is already consumed so the second parser is a no-op.
+
+So register `receive-jobs` with its own parser *before* the global one. It authenticates
+with `WEBHOOK_SECRET` rather than a session, so it does not need `attachSession` and is
+safe this early in the chain:
 
 ```ts
-app.post('/api/receive-jobs', express.json({ limit: '20mb' }), requireWebhookSecret, /* ... */);
+// Before the global body parser: this route needs a larger limit than everything else,
+// and a route-local parser mounted after the global one would never see the body.
+app.post(
+    '/api/receive-jobs',
+    express.json({ limit: '20mb' }),
+    requireWebhookSecret,
+    (req: Request, res: Response) => { /* handler, see Task 11 */ },
+);
+
+app.use(express.json({ limit: '1mb' }));
 ```
 
 - [ ] **Step 11: Update `server.ts`**
