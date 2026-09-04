@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
+import helmet from 'helmet';
 import { toNodeHandler, fromNodeHeaders } from 'better-auth/node';
 import type { Db } from './db.js';
 import type { AppAuth, SessionUser } from './auth.js';
@@ -38,6 +39,8 @@ export function createApp(db: Db, opts: AppOptions): Express {
     const app = express();
     const requireWebhookSecret = makeRequireWebhookSecret(opts.config.webhookSecret);
 
+    app.use(helmet());
+
     // Better Auth reads the raw request body, so its handler must be registered before
     // any body parser. Express 4 wildcard syntax: '*', not Express 5's '*splat'.
     app.all('/api/auth/*', toNodeHandler(opts.auth));
@@ -67,6 +70,20 @@ export function createApp(db: Db, opts: AppOptions): Express {
             });
         },
     );
+
+    // Checked before the session is resolved, so a cross-origin caller gets nothing —
+    // not even the cost of a session lookup. Sits after `receive-jobs` deliberately:
+    // that route is server-to-server, sends no Origin, and is authenticated by
+    // WEBHOOK_SECRET instead, so ordering exempts it without a path special-case.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+        const isApi = req.path.startsWith('/api');
+        const isUnsafe = req.method === 'POST' || req.method === 'PATCH' || req.method === 'DELETE';
+        if (isApi && isUnsafe && req.headers.origin !== opts.config.publicOrigin) {
+            res.status(403).json({ error: 'Request origin is not allowed' });
+            return;
+        }
+        next();
+    });
 
     app.use(express.json({ limit: '1mb' }));
 
