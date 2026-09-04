@@ -5,6 +5,8 @@ import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs, fetchScrapeInfo, 
 import { authClient } from './auth';
 import { openAuthModal, closeAuthModal, submitAuth, wireAuthTabs } from './components/authModal';
 import { openAdminPanel, closeAdminPanel, refreshPendingBadge } from './components/admin';
+import { renderAccountChip, wireAccountMenu, closeAccountMenu } from './components/accountMenu';
+import { openAccountModal, closeAccountModal, wireAccountModal } from './components/accountModal';
 import { groupJobs } from './utils';
 import { renderBoard, wireDropzones } from './components/board';
 import { openModal, saveModal, closeModal, openScoreboard, closeScoreboard, openBin, closeBin, openConfirm, closeConfirm, openCoverLetterModal, closeCoverLetterModal, setCoverLetterTemplate, downloadCoverLetterPDF, generateCoverLetterWithAI } from './components/modals';
@@ -31,7 +33,6 @@ async function init(): Promise<void> {
     els.binBtn = $('view-bin');
     els.scrapeBtn = $('trigger-scrape');
     els.signInBtn = $('sign-in');
-    els.logOutBtn = $('log-out');
     els.demoBanner = $('demo-banner');
     els.bannerSignIn = $('banner-sign-in');
     els.loginBackdrop = $('login-backdrop');
@@ -49,12 +50,24 @@ async function init(): Promise<void> {
     els.authPending = $('auth-pending');
     els.tabSignin = $('tab-signin');
     els.tabSignup = $('tab-signup');
-    els.adminBtn = $('view-admin');
-    els.adminBadge = $('admin-badge');
     els.adminBackdrop = $('admin-backdrop');
     els.adminClose = $('admin-close');
     els.adminList = $('admin-list');
     els.adminEmpty = $('admin-empty');
+    els.accountWrap = $('account-wrap');
+    els.accountChip = $('account-chip');
+    els.accountChipName = $('account-chip-name');
+    els.accountChipInitial = $('account-chip-initial');
+    els.accountChipBadge = $('account-chip-badge');
+    els.accountMenu = $('account-menu');
+    els.accountMenuUsername = $('account-menu-username');
+    els.accountMenuRole = $('account-menu-role');
+    els.menuAccount = $('menu-account');
+    els.menuAdmin = $('menu-admin');
+    els.menuAdminBadge = $('menu-admin-badge');
+    els.menuLogout = $('menu-logout');
+    els.accountBackdrop = $('account-backdrop');
+    els.accountClose = $('account-close');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
     els.sprintPointsText = $('sprint-points-text');
@@ -203,6 +216,8 @@ async function init(): Promise<void> {
             closeScoreboard();
             closeConfirm();
             closeCoverLetterModal();
+            closeAccountMenu(true);
+            closeAccountModal();
         }
     });
 
@@ -227,6 +242,8 @@ async function init(): Promise<void> {
         if (e.target === els.loginBackdrop) closeAuthModal();
     });
     wireAuthTabs();
+    wireAccountMenu();
+    wireAccountModal();
 
     const onAuthSubmit = async () => {
         const signedIn = await submitAuth();
@@ -243,14 +260,15 @@ async function init(): Promise<void> {
         });
     }
 
-    if (els.logOutBtn) els.logOutBtn.addEventListener('click', async () => {
+    if (els.menuLogout) els.menuLogout.addEventListener('click', async () => {
         await authClient.signOut();
         await refreshAuth();
         await Promise.all([fetchJobs(), fetchHistory()]);
         setStatus('Signed out');
     });
 
-    if (els.adminBtn) els.adminBtn.addEventListener('click', openAdminPanel);
+    if (els.menuAdmin) els.menuAdmin.addEventListener('click', openAdminPanel);
+    if (els.menuAccount) els.menuAccount.addEventListener('click', openAccountModal);
     if (els.adminClose) els.adminClose.addEventListener('click', closeAdminPanel);
     if (els.adminBackdrop) els.adminBackdrop.addEventListener('click', (e) => {
         if (e.target === els.adminBackdrop) closeAdminPanel();
@@ -269,6 +287,7 @@ async function refreshAuth(): Promise<void> {
     setIsAuthenticated(me.authenticated);
     setIsOwner(owner);
     setCurrentUser({ username: me.username, role: me.role });
+    renderAccountChip();
     applyAuthVisibility(me.authenticated, owner);
     if (owner) await refreshPendingBadge();
 }
@@ -278,11 +297,12 @@ function applyAuthVisibility(authenticated: boolean, owner: boolean): void {
         if (el) el.classList.toggle('hidden', !visible);
     };
     show(els.signInBtn, !authenticated);
-    show(els.logOutBtn, authenticated);
+    show(els.accountWrap, authenticated);
     show(els.demoBanner, !authenticated);
     show(els.scrapeBtn, authenticated);  // members scrape onto their own board
-    show(els.adminBtn, owner);           // approving accounts is owner-only
+    show(els.menuAdmin, owner);          // approving accounts is owner-only
     show(els.btnTemplateAi, owner);      // AI cover letter reads the owner's identity.json
+    if (!authenticated) closeAccountMenu();
 }
 
 async function updateScrapeButtonStatus() {

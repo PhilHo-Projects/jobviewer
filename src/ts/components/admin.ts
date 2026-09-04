@@ -48,7 +48,7 @@ function renderRow(u: AdminUser): string {
         </button>`;
 
     return `
-    <div class="border-2 border-black shadow-[2px_2px_0_#000] p-3 flex justify-between items-center gap-3 bg-theme-surface">
+    <div class="border-2 border-black shadow-[2px_2px_0_#000] p-3 flex justify-between items-center gap-3 bg-theme-card">
       <div class="min-w-0">
         <div class="flex items-center gap-2">
           <span class="text-sm font-black text-theme-primary truncate">${escapeHtml(u.username)}</span>
@@ -106,7 +106,11 @@ export async function refreshPendingBadge(): Promise<void> {
     } catch {
         setPendingCount(0);
     }
-    if (!els.adminBadge) return;
-    els.adminBadge.textContent = String(pendingCount);
-    els.adminBadge.classList.toggle('hidden', pendingCount === 0);
+    // Two badges from one read: the header chip and the menu row.
+    const text = String(pendingCount);
+    for (const badge of [els.accountChipBadge, els.menuAdminBadge]) {
+        if (!badge) continue;
+        badge.textContent = text;
+        badge.classList.toggle('hidden', pendingCount === 0);
+    }
 }

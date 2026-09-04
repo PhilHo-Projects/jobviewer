@@ -38,7 +38,6 @@ export const els: Record<string, HTMLElement | null> = {
     btnTemplateAi: null,
     scrapeBtn: null,
     signInBtn: null,
-    logOutBtn: null,
     demoBanner: null,
     bannerSignIn: null,
     loginBackdrop: null,
@@ -56,12 +55,24 @@ export const els: Record<string, HTMLElement | null> = {
     authPending: null,
     tabSignin: null,
     tabSignup: null,
-    adminBtn: null,
-    adminBadge: null,
     adminBackdrop: null,
     adminClose: null,
     adminList: null,
-    adminEmpty: null
+    adminEmpty: null,
+    accountWrap: null,
+    accountChip: null,
+    accountChipName: null,
+    accountChipInitial: null,
+    accountChipBadge: null,
+    accountMenu: null,
+    accountMenuUsername: null,
+    accountMenuRole: null,
+    menuAccount: null,
+    menuAdmin: null,
+    menuAdminBadge: null,
+    menuLogout: null,
+    accountBackdrop: null,
+    accountClose: null
 };
 
 export function $(id: string): HTMLElement | null {
