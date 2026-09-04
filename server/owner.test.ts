@@ -67,3 +67,38 @@ test('the seeded owner can sign in', async () => {
         assert.ok(result);
     } finally { db.close(); }
 });
+
+test('ensureOwner drains the legacy holding tables exactly once', async () => {
+    const db = new Database(':memory:');
+    db.pragma('foreign_keys = ON');
+    // Simulate a pre-cutover database: v1 tables with an owner and one job.
+    const { MIGRATIONS } = await import('./migrations.js');
+    db.exec(MIGRATIONS[0].sql);
+    db.prepare(`INSERT INTO users (username,password_hash,role,created_at)
+                VALUES ('phil','x','owner','2026-01-01')`).run();
+    db.prepare(`INSERT INTO jobs (user_id,id,title,company,status,notes)
+                VALUES (1,'j1','Old Job','ACME','new','keep me')`).run();
+    db.exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`);
+    db.prepare(`INSERT INTO schema_migrations VALUES (1, '2026-01-01')`).run();
+    migrate(db);
+
+    const config = loadConfig(TEST_ENV);
+    const auth = buildAuth({ db, config });
+    const ownerId = await ensureOwner({ auth, db, config });
+
+    const rows = db.prepare('SELECT user_id, id, notes FROM jobs').all() as any[];
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].user_id, ownerId);
+    assert.equal(rows[0].notes, 'keep me');
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM legacy_owner_jobs').get() as { n: number }).n, 0);
+
+    // The hand-rolled identity table is gone; Better Auth's "user" is the only one left.
+    const legacyUsers = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='users'`)
+        .get();
+    assert.equal(legacyUsers, undefined);
+
+    await ensureOwner({ auth, db, config });
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number }).n, 1);
+    db.close();
+});

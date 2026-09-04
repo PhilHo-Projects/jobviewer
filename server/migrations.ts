@@ -125,6 +125,49 @@ export const MIGRATIONS: Migration[] = [
                 ON "account" ("issuer", "accountId");
         `,
     },
+    // The identity cutover. Better Auth's "user" becomes the only identity table.
+    //
+    // The carried-over rows cannot be inserted here: their new user_id is the owner's
+    // Better Auth id, which does not exist until ensureOwner runs at boot, and that
+    // cannot run before migration 2 created the tables it needs. So the rows are parked
+    // in FK-free holding tables and drained by an idempotent boot step instead.
+    {
+        version: 3,
+        sql: `
+            CREATE TABLE legacy_owner_jobs AS
+                SELECT * FROM jobs WHERE user_id IN (SELECT id FROM users WHERE role='owner');
+            CREATE TABLE legacy_owner_history AS
+                SELECT * FROM history WHERE user_id IN (SELECT id FROM users WHERE role='owner');
+            CREATE TABLE legacy_owner_scrape_info AS
+                SELECT * FROM scrape_info WHERE user_id IN (SELECT id FROM users WHERE role='owner');
+
+            DROP TABLE jobs;
+            DROP TABLE history;
+            DROP TABLE scrape_info;
+            DROP TABLE users;
+
+            CREATE TABLE jobs (
+                user_id TEXT NOT NULL REFERENCES "user"("id"),
+                id TEXT NOT NULL,
+                title TEXT, company TEXT, location TEXT, url TEXT,
+                status TEXT, statusSummary TEXT, statusSummaryUpdatedAt TEXT,
+                appliedDate TEXT, scrapedDate TEXT, notes TEXT, summary TEXT, posted TEXT,
+                PRIMARY KEY (user_id, id)
+            );
+            CREATE TABLE history (
+                user_id TEXT NOT NULL REFERENCES "user"("id"),
+                date TEXT NOT NULL,
+                wins TEXT, basePoints INTEGER, scoreMultiplier REAL, totalPoints INTEGER,
+                PRIMARY KEY (user_id, date)
+            );
+            CREATE TABLE scrape_info (
+                user_id TEXT PRIMARY KEY REFERENCES "user"("id"),
+                lastTriggerDate TEXT
+            );
+
+            CREATE INDEX jobs_user_idx ON jobs(user_id);
+        `,
+    },
 ];
 
 export function appliedVersions(db: Db): number[] {

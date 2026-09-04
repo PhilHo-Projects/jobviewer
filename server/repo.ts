@@ -1,40 +1,11 @@
 import crypto from 'crypto';
 import type { Db } from './db.js';
-import type { HistoryEntry, Job, SessionUser } from '../shared/types.js';
+import type { HistoryEntry, Job } from '../shared/types.js';
 
-interface UserRow {
-    id: number;
-    username: string;
-    role: 'owner' | 'demo';
-    password_hash: string | null;
-}
-
-export function getUserById(db: Db, id: number): SessionUser | null {
-    const row = db.prepare(`SELECT id, username, role FROM users WHERE id=?`).get(id) as
-        | SessionUser
-        | undefined;
-    return row ?? null;
-}
-
-export function getDemoUser(db: Db): SessionUser | null {
-    const row = db.prepare(`SELECT id, username, role FROM users WHERE role='demo'`).get() as
-        | SessionUser
-        | undefined;
-    return row ?? null;
-}
-
-export function getOwnerUser(db: Db): SessionUser | null {
-    const row = db.prepare(`SELECT id, username, role FROM users WHERE role='owner'`).get() as
-        | SessionUser
-        | undefined;
-    return row ?? null;
-}
-
-export function getUserByUsername(db: Db, username: string): UserRow | null {
-    const row = db
-        .prepare(`SELECT id, username, role, password_hash FROM users WHERE username=?`)
-        .get(username) as UserRow | undefined;
-    return row ?? null;
+export function getOwnerId(db: Db): string | null {
+    const row = db.prepare(`SELECT "id" FROM "user" WHERE "role"='owner' LIMIT 1`).get() as
+        | { id: string } | undefined;
+    return row?.id ?? null;
 }
 
 const JOB_COLUMNS = [
@@ -82,7 +53,7 @@ function mergeJob(existing: Job, incoming: Job): Job {
     };
 }
 
-function toRow(userId: number, job: Job): Record<string, unknown> {
+function toRow(userId: string, job: Job): Record<string, unknown> {
     const row: Record<string, unknown> = { user_id: userId };
     for (const col of JOB_COLUMNS) {
         row[col] = (job as any)[col] ?? null;
@@ -96,17 +67,19 @@ function rowToJob(row: any): Job {
     return job as Job;
 }
 
-export function getJobs(db: Db, userId: number): Job[] {
-    const rows = db.prepare(`SELECT * FROM jobs WHERE user_id=?`).all(userId);
+export function getJobs(db: Db, userId: string): Job[] {
+    const rows = db
+        .prepare(`SELECT * FROM jobs WHERE user_id=? ORDER BY scrapedDate DESC, id`)
+        .all(userId);
     return rows.map(rowToJob);
 }
 
-export function getJobById(db: Db, userId: number, id: string): Job | null {
+export function getJobById(db: Db, userId: string, id: string): Job | null {
     const row = db.prepare(`SELECT * FROM jobs WHERE user_id=? AND id=?`).get(userId, id);
     return row ? rowToJob(row) : null;
 }
 
-export function upsertJobs(db: Db, userId: number, incoming: Partial<Job>[]): Job[] {
+export function upsertJobs(db: Db, userId: string, incoming: Partial<Job>[]): Job[] {
     const cols = JOB_COLUMNS.map((c) => c).join(', ');
     const placeholders = JOB_COLUMNS.map((c) => `@${c}`).join(', ');
     const insert = db.prepare(
@@ -132,7 +105,7 @@ export function upsertJobs(db: Db, userId: number, incoming: Partial<Job>[]): Jo
 
 export function patchJob(
     db: Db,
-    userId: number,
+    userId: string,
     id: string,
     patch: Partial<Job>
 ): Job | null {
@@ -154,21 +127,21 @@ export function patchJob(
     return next;
 }
 
-export function bulkMove(db: Db, userId: number, from: string, to: string): number {
+export function bulkMove(db: Db, userId: string, from: string, to: string): number {
     const info = db
         .prepare(`UPDATE jobs SET status=? WHERE user_id=? AND status=?`)
         .run(to, userId, from);
     return info.changes;
 }
 
-export function deleteByStatus(db: Db, userId: number, status: string): number {
+export function deleteByStatus(db: Db, userId: string, status: string): number {
     const info = db
         .prepare(`DELETE FROM jobs WHERE user_id=? AND status=?`)
         .run(userId, status);
     return info.changes;
 }
 
-export function getHistory(db: Db, userId: number): HistoryEntry[] {
+export function getHistory(db: Db, userId: string): HistoryEntry[] {
     const rows = db
         .prepare(`SELECT date, wins, basePoints, scoreMultiplier, totalPoints FROM history WHERE user_id=? ORDER BY date DESC`)
         .all(userId) as any[];
@@ -181,7 +154,7 @@ export function getHistory(db: Db, userId: number): HistoryEntry[] {
     }));
 }
 
-export function insertHistory(db: Db, userId: number, entry: HistoryEntry): void {
+export function insertHistory(db: Db, userId: string, entry: HistoryEntry): void {
     db.prepare(
         `INSERT OR REPLACE INTO history (user_id, date, wins, basePoints, scoreMultiplier, totalPoints)
          VALUES (?, ?, ?, ?, ?, ?)`
@@ -195,14 +168,14 @@ export function insertHistory(db: Db, userId: number, entry: HistoryEntry): void
     );
 }
 
-export function getScrapeInfo(db: Db, userId: number): { lastTriggerDate: string | null } {
+export function getScrapeInfo(db: Db, userId: string): { lastTriggerDate: string | null } {
     const row = db
         .prepare(`SELECT lastTriggerDate FROM scrape_info WHERE user_id=?`)
         .get(userId) as { lastTriggerDate: string | null } | undefined;
     return { lastTriggerDate: row ? row.lastTriggerDate : null };
 }
 
-export function setScrapeInfo(db: Db, userId: number, lastTriggerDate: string): void {
+export function setScrapeInfo(db: Db, userId: string, lastTriggerDate: string): void {
     db.prepare(
         `INSERT INTO scrape_info (user_id, lastTriggerDate) VALUES (?, ?)
          ON CONFLICT(user_id) DO UPDATE SET lastTriggerDate=excluded.lastTriggerDate`

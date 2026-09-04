@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { migrate, appliedVersions } from './migrations.js';
+import { migrate, appliedVersions, MIGRATIONS } from './migrations.js';
 
 function tableNames(db: Database.Database): string[] {
     return db
@@ -10,15 +10,37 @@ function tableNames(db: Database.Database): string[] {
         .map((r: any) => r.name);
 }
 
-test('migrate creates the version 1 schema on a fresh database', () => {
+test("migration 1's own SQL creates the pre-cutover schema", () => {
+    // Run version 1 in isolation. A full `migrate()` would carry straight on through
+    // the cutover in version 3, which drops `users` again.
     const db = new Database(':memory:');
-    migrate(db);
+    db.exec(MIGRATIONS[0].sql);
     const names = tableNames(db);
     assert.ok(names.includes('users'));
     assert.ok(names.includes('jobs'));
     assert.ok(names.includes('history'));
     assert.ok(names.includes('scrape_info'));
-    assert.ok(appliedVersions(db).includes(1));
+    db.close();
+});
+
+test('migrate leaves a fresh database at the post-cutover schema', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    const names = tableNames(db);
+    assert.ok(names.includes('jobs'));
+    assert.ok(names.includes('history'));
+    assert.ok(names.includes('scrape_info'));
+    assert.ok(!names.includes('users'), 'the hand-rolled identity table is dropped');
+    assert.deepEqual(appliedVersions(db), [1, 2, 3]);
+    db.close();
+});
+
+test('the cutover retypes jobs.user_id to TEXT', () => {
+    const db = new Database(':memory:');
+    migrate(db);
+    const userIdCol = db.prepare(`PRAGMA table_info("jobs")`).all()
+        .find((r: any) => r.name === 'user_id') as { type: string };
+    assert.equal(userIdCol.type, 'TEXT');
     db.close();
 });
 
