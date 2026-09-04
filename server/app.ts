@@ -13,6 +13,7 @@ import {
     upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus, createStableJobId,
 } from './repo.js';
 import { loadFixture, EMPTY_SCRAPE_INFO } from './fixture.js';
+import { registerAdminRoutes, pendingCount } from './admin.js';
 import type { Job } from '../shared/types.js';
 
 export interface AppOptions {
@@ -116,8 +117,12 @@ export function createApp(db: Db, opts: AppOptions): Express {
             username: user?.username ?? null,
             role: user?.role ?? null,
             isDemo: !user,
+            // Drives the owner's pending-accounts badge; nobody else needs the number.
+            pendingCount: user?.role === 'owner' ? pendingCount(db) : 0,
         });
     });
+
+    registerAdminRoutes(app, db);
 
     // --- Per-user write routes, scoped to the caller ---
     app.post('/api/jobs', requireUser, (req: AuthedRequest, res: Response) => {
