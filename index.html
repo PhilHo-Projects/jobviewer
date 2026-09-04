@@ -43,53 +43,87 @@
                         class="btn-accent inline-flex items-center justify-center text-xs font-black uppercase tracking-widest px-3 py-2 border-2 border-black shadow-[2px_2px_0_#000] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
                         Sign In
                     </button>
-                    <button id="log-out" type="button" title="Log Out"
-                        class="btn-icon hidden inline-flex items-center justify-center text-xs font-black uppercase tracking-widest px-3 py-2 border-2 transition-all active:scale-95">
-                        Log Out
-                    </button>
-                    <button id="view-admin" type="button" title="Pending Accounts"
-                        class="btn-icon hidden relative inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span id="admin-badge"
-                            class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-black bg-[#ff0040] text-white border-2 border-black rounded-full"></span>
-                    </button>
-                    <button id="add-job" type="button" title="Add Manual Job"
-                        class="btn-accent inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                    </button>
-                    <button id="view-bin" type="button" title="Recycle Bin"
-                        class="btn-icon inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                    </button>
-                    <button id="trigger-scrape" type="button" aria-label="Trigger n8n Scrape"
-                        title="Trigger Scrape (Max 1/day)"
-                        class="btn-icon inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-theme-accent" fill="none"
-                            viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                    </button>
+                    <div id="account-wrap" class="hidden relative">
+                        <button id="account-chip" type="button" title="Account" aria-haspopup="menu"
+                            aria-expanded="false"
+                            class="btn-icon relative inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-widest px-3 py-2 transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                            <span id="account-chip-initial" class="sm:hidden"></span>
+                            <span id="account-chip-name" class="hidden sm:inline max-w-[10ch] truncate"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                            <span id="account-chip-badge"
+                                class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-black bg-[#ff0040] text-white border-2 border-black rounded-full"></span>
+                        </button>
 
-                    <button id="refresh" type="button" title="Refresh List"
-                        class="btn-icon inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                    </button>
+                        <div id="account-menu" role="menu" aria-label="Account"
+                            class="hidden absolute right-0 top-full mt-2 w-56 bg-theme-card border-2 border-black shadow-[4px_4px_0_#000] z-[200]">
+                            <div class="p-3 border-b-2 border-black">
+                                <div class="text-[10px] font-black uppercase tracking-widest text-theme-muted">Signed in
+                                    as</div>
+                                <div class="flex items-center justify-between gap-2 mt-1">
+                                    <span id="account-menu-username"
+                                        class="text-sm font-black text-theme-primary truncate"></span>
+                                    <span id="account-menu-role"
+                                        class="shrink-0 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest border-2 border-black"></span>
+                                </div>
+                            </div>
+                            <button id="menu-account" type="button" role="menuitem"
+                                class="block w-full text-left px-3 py-2.5 text-xs font-black uppercase tracking-widest text-theme-primary hover:bg-theme-button transition-colors">
+                                Account…
+                            </button>
+                            <button id="menu-admin" type="button" role="menuitem"
+                                class="hidden w-full text-left px-3 py-2.5 text-xs font-black uppercase tracking-widest text-theme-primary hover:bg-theme-button transition-colors">
+                                <span class="flex items-center justify-between gap-2">
+                                    <span>Accounts…</span>
+                                    <span id="menu-admin-badge"
+                                        class="hidden min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center text-[10px] font-black bg-[#ff0040] text-white border-2 border-black rounded-full"></span>
+                                </span>
+                            </button>
+                            <button id="menu-logout" type="button" role="menuitem"
+                                class="block w-full text-left px-3 py-2.5 text-xs font-black uppercase tracking-widest text-[#ff0040] border-t-2 border-black hover:bg-theme-button transition-colors">
+                                Log Out
+                            </button>
+                        </div>
+                    </div>
+                    <div
+                        class="flex items-stretch border-2 border-black shadow-[2px_2px_0_#000] divide-x-2 divide-black">
+                        <button id="add-job" type="button" title="Add Manual Job"
+                            class="btn-accent btn-grouped inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
+                        <button id="view-bin" type="button" title="Recycle Bin"
+                            class="btn-icon btn-grouped inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                        <button id="trigger-scrape" type="button" aria-label="Trigger n8n Scrape"
+                            title="Trigger Scrape (Max 1/day)"
+                            class="btn-icon btn-grouped inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-theme-accent" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </button>
+                        <button id="refresh" type="button" title="Refresh List"
+                            class="btn-icon btn-grouped inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -491,6 +525,90 @@
             </header>
             <div id="admin-list" class="p-4 space-y-3 overflow-y-auto"></div>
             <div id="admin-empty" class="hidden p-6 text-center text-sm text-theme-muted">No accounts yet.</div>
+        </div>
+    </div>
+
+    <div id="account-backdrop"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[300] p-4 hidden"
+        role="dialog" aria-modal="true" aria-label="Account">
+        <div class="modal-container w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden" role="document">
+            <header class="modal-header flex items-center justify-between p-4 border-b sticky top-0 z-10">
+                <h2 class="text-lg font-black text-theme-primary uppercase tracking-widest">Account</h2>
+                <button id="account-close" type="button"
+                    class="text-theme-secondary hover:text-theme-primary transition-colors p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div class="overflow-y-auto divide-y-2 divide-black">
+                <section class="p-4 space-y-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span id="account-username" class="text-base font-black text-theme-primary truncate"></span>
+                        <span id="account-role"
+                            class="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest border-2 border-black"></span>
+                        <span id="account-approval"
+                            class="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest border-2 border-black"></span>
+                    </div>
+                    <div id="account-email" class="text-[11px] text-theme-muted truncate"></div>
+                    <div class="text-[11px] text-theme-muted">Member since <span id="account-since">—</span></div>
+                </section>
+
+                <section class="p-4 space-y-1">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-theme-muted">Daily scrape</div>
+                    <div id="account-scrape-status" class="text-sm font-black uppercase tracking-widest"></div>
+                    <div id="account-scrape-last" class="text-[11px] text-theme-muted"></div>
+                </section>
+
+                <section class="p-4 space-y-3">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-theme-muted">Change password</div>
+                    <div class="flex flex-col gap-1.5">
+                        <label for="pw-current"
+                            class="text-xs font-bold text-theme-muted uppercase tracking-widest">Current password</label>
+                        <input id="pw-current" type="password" autocomplete="current-password"
+                            class="input-field text-sm px-3 py-2.5 outline-none w-full" />
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label for="pw-new" class="text-xs font-bold text-theme-muted uppercase tracking-widest">New
+                            password</label>
+                        <input id="pw-new" type="password" autocomplete="new-password"
+                            class="input-field text-sm px-3 py-2.5 outline-none w-full" />
+                        <p class="text-[10px] text-theme-muted">At least 12 characters.</p>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label for="pw-confirm"
+                            class="text-xs font-bold text-theme-muted uppercase tracking-widest">Confirm new
+                            password</label>
+                        <input id="pw-confirm" type="password" autocomplete="new-password"
+                            class="input-field text-sm px-3 py-2.5 outline-none w-full" />
+                    </div>
+                    <label
+                        class="flex items-center gap-2 text-[11px] font-bold text-theme-muted uppercase tracking-widest">
+                        <input id="pw-revoke-others" type="checkbox" checked
+                            class="w-4 h-4 border-2 border-black accent-emerald-400" />
+                        Sign out other devices
+                    </label>
+                    <div id="pw-error" class="hidden text-xs font-bold text-rose-500"></div>
+                    <div id="pw-success" class="hidden text-xs font-bold text-emerald-600"></div>
+                    <button id="pw-submit" type="button"
+                        class="btn-accent w-full bg-emerald-400 text-black border-2 border-black shadow-[4px_4px_0_#000] text-sm font-black px-4 py-2.5 uppercase tracking-widest transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                        Change Password
+                    </button>
+                </section>
+
+                <section class="p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-[10px] font-black uppercase tracking-widest text-theme-muted">Active sessions
+                        </div>
+                        <button id="sessions-revoke-others" type="button"
+                            class="shrink-0 px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-[#ff0040] text-white border-2 border-black shadow-[2px_2px_0_#000] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                            Sign out everywhere else
+                        </button>
+                    </div>
+                    <div id="sessions-list" class="space-y-2"></div>
+                </section>
+            </div>
         </div>
     </div>
 

@@ -9,9 +9,9 @@
     "dev:ui": "vite",
     "dev:server": "nodemon --exec tsx server.ts",
     "dev": "concurrently \"npm run dev:ui\" \"npm run dev:server\"",
-    "build": "vite build && tsc -p tsconfig.server.json",
+    "build": "tsc -p tsconfig.json --noEmit && vite build && tsc -p tsconfig.server.json",
     "build:server": "tsc -p tsconfig.server.json",
-    "test": "node --import tsx --test \"server/**/*.test.ts\""
+    "test": "node --import tsx --test \"server/**/*.test.ts\" \"src/**/*.test.ts\""
   },
   "dependencies": {
     "better-auth": "1.7.1",

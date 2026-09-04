@@ -1,5 +1,9 @@
 import { createAuthClient } from 'better-auth/client';
 import { usernameClient } from 'better-auth/client/plugins';
+// Defined in `account.ts`, which holds no `better-auth` import and so can be
+// unit-tested; re-exported here because every existing caller imports them from
+// this module.
+import { MIN_PASSWORD_LENGTH, MIN_USERNAME_LENGTH } from './account';
 
 /**
  * The API and the SPA are served by the same Express instance, so no baseURL is
@@ -7,9 +11,7 @@ import { usernameClient } from 'better-auth/client/plugins';
  */
 export const authClient = createAuthClient({ plugins: [usernameClient()] });
 
-/** Mirrors `minPasswordLength` on the server. Shown in the form, enforced there. */
-export const MIN_PASSWORD_LENGTH = 12;
-export const MIN_USERNAME_LENGTH = 3;
+export { MIN_PASSWORD_LENGTH, MIN_USERNAME_LENGTH };
 
 /** Turn Better Auth's error codes into something a person wants to read. */
 export function authErrorMessage(code: string | undefined, fallback: string): string {
@@ -21,6 +23,8 @@ export function authErrorMessage(code: string | undefined, fallback: string): st
         case 'INVALID_USERNAME_OR_PASSWORD':
         case 'INVALID_EMAIL_OR_PASSWORD':
             return 'That username and password do not match.';
+        case 'INVALID_PASSWORD':
+            return 'That current password is not right.';
         case 'USERNAME_IS_ALREADY_TAKEN':
         case 'USERNAME_IS_ALREADY_IN_USE':
             return 'That username is taken.';

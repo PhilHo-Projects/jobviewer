@@ -241,6 +241,25 @@
         box-shadow: 2px 2px 0 #000;
     }
 
+    /* A button inside a bordered group: the shell owns the border and the shadow.
+       The hover translate is dropped too — a button that jumps inside a fixed
+       shell reads as broken rather than tactile.
+
+       `border-width` deliberately carries no `!important`: it only has to beat
+       `.btn-icon` and `.btn-accent`, which it does on source order inside this
+       layer, and marking it important would also override the group's
+       `divide-x-2` dividers, which live in Tailwind's later utilities layer. */
+    .btn-grouped {
+        border-width: 0;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .btn-grouped:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
     /* ===== Inputs & Selects ===== */
     .input-field {
         background-color: var(--bg-input) !important;
