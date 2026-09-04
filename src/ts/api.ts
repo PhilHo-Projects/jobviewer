@@ -1,5 +1,5 @@
 import { Job } from './types';
-import { jobs, setJobs, setHistory, isOwner } from './state';
+import { jobs, setJobs, setHistory, isAuthenticated, isOwner } from './state';
 import { setStatus, renderError } from './dom';
 import { renderBoard } from './components/board';
 import { calculateAndRefreshScore } from './components/score';
@@ -11,6 +11,7 @@ export interface MeResponse {
     username: string | null;
     role: string | null;
     isDemo: boolean;
+    pendingCount: number;
 }
 
 export async function fetchMe(): Promise<MeResponse> {
@@ -19,23 +20,8 @@ export async function fetchMe(): Promise<MeResponse> {
         if (!res.ok) throw new Error('me failed');
         return await res.json();
     } catch {
-        return { authenticated: false, username: null, role: null, isDemo: true };
+        return { authenticated: false, username: null, role: null, isDemo: true, pendingCount: 0 };
     }
-}
-
-export async function login(username: string, password: string): Promise<MeResponse> {
-    const res = await fetch(`${API_BASE}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ username, password }),
-    });
-    if (!res.ok) throw new Error('Invalid credentials');
-    return await res.json();
-}
-
-export async function logout(): Promise<void> {
-    await fetch(`${API_BASE}/logout`, { method: 'POST', credentials: 'same-origin' });
 }
 
 export async function fetchJobs(): Promise<void> {
@@ -68,7 +54,7 @@ export async function fetchHistory(): Promise<void> {
 }
 
 export async function patchJob(id: string, payload: Partial<Job>): Promise<Job> {
-    if (!isOwner) {
+    if (!isAuthenticated) {
         const idx = jobs.findIndex(j => String(j.id) === String(id));
         if (idx !== -1) {
             jobs[idx] = { ...jobs[idx], ...payload } as Job;
@@ -97,7 +83,7 @@ export async function patchJob(id: string, payload: Partial<Job>): Promise<Job> 
 }
 
 export async function createJob(payload: Partial<Job>): Promise<Job> {
-    if (!isOwner) {
+    if (!isAuthenticated) {
         return { id: `demo-${Date.now()}`, status: 'new', ...payload } as Job;
     }
     const res = await fetch(`${API_BASE}/jobs`, {
@@ -112,7 +98,7 @@ export async function createJob(payload: Partial<Job>): Promise<Job> {
 }
 
 export async function deleteDeletedJobs(): Promise<void> {
-    if (!isOwner) {
+    if (!isAuthenticated) {
         setJobs(jobs.filter(j => j.status !== 'deleted'));
         return;
     }
@@ -130,7 +116,7 @@ export async function fetchScrapeInfo(): Promise<{ lastTriggerDate: string | nul
 }
 
 export async function triggerScrape(): Promise<{ message: string; lastTriggerDate: string }> {
-    if (!isOwner) throw new Error('Sign in to trigger a scrape');
+    if (!isAuthenticated) throw new Error('Sign in to trigger a scrape');
     const res = await fetch(`${API_BASE}/trigger-scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

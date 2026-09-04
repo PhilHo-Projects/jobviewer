@@ -46,7 +46,22 @@ export const els: Record<string, HTMLElement | null> = {
     loginUsername: null,
     loginPassword: null,
     loginError: null,
-    loginSubmit: null
+    loginSubmit: null,
+    loginEmail: null,
+    loginEmailRow: null,
+    loginPasswordHint: null,
+    authTitle: null,
+    authTabs: null,
+    authForm: null,
+    authPending: null,
+    tabSignin: null,
+    tabSignup: null,
+    adminBtn: null,
+    adminBadge: null,
+    adminBackdrop: null,
+    adminClose: null,
+    adminList: null,
+    adminEmpty: null
 };
 
 export function $(id: string): HTMLElement | null {

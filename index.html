@@ -47,6 +47,16 @@
                         class="btn-icon hidden inline-flex items-center justify-center text-xs font-black uppercase tracking-widest px-3 py-2 border-2 transition-all active:scale-95">
                         Log Out
                     </button>
+                    <button id="view-admin" type="button" title="Pending Accounts"
+                        class="btn-icon hidden relative inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        <span id="admin-badge"
+                            class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-black bg-[#ff0040] text-white border-2 border-black rounded-full"></span>
+                    </button>
                     <button id="add-job" type="button" title="Add Manual Job"
                         class="btn-accent inline-flex items-center justify-center text-sm font-semibold p-2 transition-all active:scale-95">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24"
@@ -408,7 +418,7 @@
         <div class="modal-container w-full max-w-sm flex flex-col scale-95 transition-transform duration-200 overflow-hidden"
             role="document">
             <header class="modal-header flex items-center justify-between p-4 border-b sticky top-0 z-10">
-                <h2 class="text-lg font-black text-theme-primary uppercase tracking-widest">Owner Sign In</h2>
+                <h2 id="auth-title" class="text-lg font-black text-theme-primary uppercase tracking-widest">Sign In</h2>
                 <button id="login-close" type="button"
                     class="text-theme-secondary hover:text-theme-primary transition-colors p-1">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24"
@@ -418,22 +428,69 @@
                 </button>
             </header>
             <div class="p-6 space-y-4">
-                <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Username</label>
-                    <input id="login-username" type="text" autocomplete="username"
-                        class="input-field text-sm px-3 py-2.5 outline-none" />
+                <div id="auth-tabs" class="grid grid-cols-2 gap-2">
+                    <button id="tab-signin" type="button"
+                        class="text-xs font-black uppercase tracking-widest px-3 py-2 border-2 border-black shadow-[2px_2px_0_#000] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                        Sign In
+                    </button>
+                    <button id="tab-signup" type="button"
+                        class="text-xs font-black uppercase tracking-widest px-3 py-2 border-2 border-black shadow-[2px_2px_0_#000] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                        Sign Up
+                    </button>
                 </div>
-                <div class="flex flex-col gap-1.5">
-                    <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Password</label>
-                    <input id="login-password" type="password" autocomplete="current-password"
-                        class="input-field text-sm px-3 py-2.5 outline-none" />
+
+                <div id="auth-form" class="space-y-4">
+                    <div id="login-email-row" class="hidden flex-col gap-1.5">
+                        <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Email</label>
+                        <input id="login-email" type="email" autocomplete="email"
+                            class="input-field text-sm px-3 py-2.5 outline-none w-full" />
+                        <p class="text-[10px] text-theme-muted">Collected for account recovery. Never verified, never emailed.</p>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Username</label>
+                        <input id="login-username" type="text" autocomplete="username"
+                            class="input-field text-sm px-3 py-2.5 outline-none w-full" />
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs font-bold text-theme-muted uppercase tracking-widest">Password</label>
+                        <input id="login-password" type="password" autocomplete="current-password"
+                            class="input-field text-sm px-3 py-2.5 outline-none w-full" />
+                        <p id="login-password-hint" class="hidden text-[10px] text-theme-muted">At least 12 characters.</p>
+                    </div>
+                    <div id="login-error" class="hidden text-xs font-bold text-rose-500"></div>
+                    <button id="login-submit" type="button" data-mode="signin"
+                        class="btn-accent w-full bg-emerald-400 text-black border-2 border-black shadow-[4px_4px_0_#000] text-sm font-black px-4 py-2.5 uppercase tracking-widest transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+                        Sign In
+                    </button>
                 </div>
-                <div id="login-error" class="hidden text-xs font-bold text-rose-500"></div>
-                <button id="login-submit" type="button"
-                    class="btn-accent w-full bg-emerald-400 text-black border-2 border-black shadow-[4px_4px_0_#000] text-sm font-black px-4 py-2.5 uppercase tracking-widest transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
-                    Sign In
-                </button>
+
+                <div id="auth-pending" class="hidden space-y-2">
+                    <div class="text-sm font-black text-theme-primary uppercase tracking-widest">Account created</div>
+                    <p class="text-xs text-theme-secondary leading-relaxed">
+                        It is waiting to be approved. You will not be able to sign in until that
+                        happens — signing in before then is refused, not silently broken.
+                    </p>
+                </div>
             </div>
+        </div>
+    </div>
+
+    <div id="admin-backdrop"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[300] p-4 hidden"
+        role="dialog" aria-modal="true" aria-label="Accounts">
+        <div class="modal-container w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden" role="document">
+            <header class="modal-header flex items-center justify-between p-4 border-b sticky top-0 z-10">
+                <h2 class="text-lg font-black text-theme-primary uppercase tracking-widest">Accounts</h2>
+                <button id="admin-close" type="button"
+                    class="text-theme-secondary hover:text-theme-primary transition-colors p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </header>
+            <div id="admin-list" class="p-4 space-y-3 overflow-y-auto"></div>
+            <div id="admin-empty" class="hidden p-6 text-center text-sm text-theme-muted">No accounts yet.</div>
         </div>
     </div>
 

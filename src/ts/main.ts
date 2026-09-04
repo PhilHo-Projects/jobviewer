@@ -1,7 +1,10 @@
 import '../input.css';
-import { jobs, onConfirmProceed, setJobs, activeJobId, setIsOwner, setCurrentUser } from './state';
+import { jobs, onConfirmProceed, setJobs, activeJobId, setIsAuthenticated, setIsOwner, setCurrentUser } from './state';
 import { els, $, setStatus } from './dom';
-import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs, fetchScrapeInfo, triggerScrape, fetchMe, login, logout } from './api';
+import { fetchJobs, fetchHistory, patchJob, deleteDeletedJobs, fetchScrapeInfo, triggerScrape, fetchMe } from './api';
+import { authClient } from './auth';
+import { openAuthModal, closeAuthModal, submitAuth, wireAuthTabs } from './components/authModal';
+import { openAdminPanel, closeAdminPanel, refreshPendingBadge } from './components/admin';
 import { groupJobs } from './utils';
 import { renderBoard, wireDropzones } from './components/board';
 import { openModal, saveModal, closeModal, openScoreboard, closeScoreboard, openBin, closeBin, openConfirm, closeConfirm, openCoverLetterModal, closeCoverLetterModal, setCoverLetterTemplate, downloadCoverLetterPDF, generateCoverLetterWithAI } from './components/modals';
@@ -37,6 +40,21 @@ async function init(): Promise<void> {
     els.loginPassword = $('login-password');
     els.loginError = $('login-error');
     els.loginSubmit = $('login-submit');
+    els.loginEmail = $('login-email');
+    els.loginEmailRow = $('login-email-row');
+    els.loginPasswordHint = $('login-password-hint');
+    els.authTitle = $('auth-title');
+    els.authTabs = $('auth-tabs');
+    els.authForm = $('auth-form');
+    els.authPending = $('auth-pending');
+    els.tabSignin = $('tab-signin');
+    els.tabSignup = $('tab-signup');
+    els.adminBtn = $('view-admin');
+    els.adminBadge = $('admin-badge');
+    els.adminBackdrop = $('admin-backdrop');
+    els.adminClose = $('admin-close');
+    els.adminList = $('admin-list');
+    els.adminEmpty = $('admin-empty');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
     els.sprintPointsText = $('sprint-points-text');
@@ -202,62 +220,40 @@ async function init(): Promise<void> {
     }
 
     // Auth wiring
-    const openLogin = () => {
-        if (els.loginError) { els.loginError.textContent = ''; els.loginError.classList.add('hidden'); }
-        if (els.loginBackdrop) {
-            els.loginBackdrop.classList.remove('hidden');
-            requestAnimationFrame(() => {
-                els.loginBackdrop!.classList.remove('opacity-0');
-                const doc = els.loginBackdrop!.querySelector('[role="document"]');
-                if (doc) doc.classList.remove('scale-95');
-            });
-        }
-        (els.loginUsername as HTMLInputElement | null)?.focus();
-    };
-    const closeLogin = () => {
-        if (els.loginBackdrop) {
-            els.loginBackdrop.classList.add('opacity-0');
-            const doc = els.loginBackdrop.querySelector('[role="document"]');
-            if (doc) doc.classList.add('scale-95');
-            setTimeout(() => {
-                if (els.loginBackdrop!.classList.contains('opacity-0')) els.loginBackdrop!.classList.add('hidden');
-            }, 200);
-        }
-    };
-
-    if (els.signInBtn) els.signInBtn.addEventListener('click', openLogin);
-    if (els.bannerSignIn) els.bannerSignIn.addEventListener('click', openLogin);
-    if (els.loginClose) els.loginClose.addEventListener('click', closeLogin);
+    if (els.signInBtn) els.signInBtn.addEventListener('click', () => openAuthModal('signin'));
+    if (els.bannerSignIn) els.bannerSignIn.addEventListener('click', () => openAuthModal('signin'));
+    if (els.loginClose) els.loginClose.addEventListener('click', closeAuthModal);
     if (els.loginBackdrop) els.loginBackdrop.addEventListener('click', (e) => {
-        if (e.target === els.loginBackdrop) closeLogin();
+        if (e.target === els.loginBackdrop) closeAuthModal();
     });
+    wireAuthTabs();
 
-    const submitLogin = async () => {
-        const username = (els.loginUsername as HTMLInputElement | null)?.value || '';
-        const password = (els.loginPassword as HTMLInputElement | null)?.value || '';
-        try {
-            await login(username, password);
-            await refreshAuth();
-            await Promise.all([fetchJobs(), fetchHistory(), updateScrapeButtonStatus()]);
-            closeLogin();
-            setStatus('Signed in');
-        } catch {
-            if (els.loginError) {
-                els.loginError.textContent = 'Invalid credentials';
-                els.loginError.classList.remove('hidden');
-            }
-        }
+    const onAuthSubmit = async () => {
+        const signedIn = await submitAuth();
+        if (!signedIn) return; // sign-up shows the pending panel and stays open
+        await refreshAuth();
+        await Promise.all([fetchJobs(), fetchHistory(), updateScrapeButtonStatus()]);
+        closeAuthModal();
+        setStatus('Signed in');
     };
-    if (els.loginSubmit) els.loginSubmit.addEventListener('click', submitLogin);
-    if (els.loginPassword) els.loginPassword.addEventListener('keydown', (e: KeyboardEvent) => {
-        if (e.key === 'Enter') submitLogin();
-    });
+    if (els.loginSubmit) els.loginSubmit.addEventListener('click', onAuthSubmit);
+    for (const field of [els.loginUsername, els.loginPassword, els.loginEmail]) {
+        if (field) field.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter') onAuthSubmit();
+        });
+    }
 
     if (els.logOutBtn) els.logOutBtn.addEventListener('click', async () => {
-        await logout();
+        await authClient.signOut();
         await refreshAuth();
         await Promise.all([fetchJobs(), fetchHistory()]);
         setStatus('Signed out');
+    });
+
+    if (els.adminBtn) els.adminBtn.addEventListener('click', openAdminPanel);
+    if (els.adminClose) els.adminClose.addEventListener('click', closeAdminPanel);
+    if (els.adminBackdrop) els.adminBackdrop.addEventListener('click', (e) => {
+        if (e.target === els.adminBackdrop) closeAdminPanel();
     });
 
     wireDropzones();
@@ -269,20 +265,24 @@ async function init(): Promise<void> {
 
 async function refreshAuth(): Promise<void> {
     const me = await fetchMe();
-    setIsOwner(me.authenticated);
+    const owner = me.role === 'owner';
+    setIsAuthenticated(me.authenticated);
+    setIsOwner(owner);
     setCurrentUser({ username: me.username, role: me.role });
-    applyAuthVisibility(me.authenticated);
+    applyAuthVisibility(me.authenticated, owner);
+    if (owner) await refreshPendingBadge();
 }
 
-function applyAuthVisibility(owner: boolean): void {
+function applyAuthVisibility(authenticated: boolean, owner: boolean): void {
     const show = (el: HTMLElement | null, visible: boolean) => {
         if (el) el.classList.toggle('hidden', !visible);
     };
-    show(els.signInBtn, !owner);
-    show(els.logOutBtn, owner);
-    show(els.demoBanner, !owner);
-    show(els.scrapeBtn, owner);          // n8n scraper is owner-only
-    show(els.btnTemplateAi, owner);      // AI cover letter (n8n + PII) is owner-only
+    show(els.signInBtn, !authenticated);
+    show(els.logOutBtn, authenticated);
+    show(els.demoBanner, !authenticated);
+    show(els.scrapeBtn, authenticated);  // members scrape onto their own board
+    show(els.adminBtn, owner);           // approving accounts is owner-only
+    show(els.btnTemplateAi, owner);      // AI cover letter reads the owner's identity.json
 }
 
 async function updateScrapeButtonStatus() {
