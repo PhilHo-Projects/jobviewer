@@ -76,6 +76,13 @@ async function init(): Promise<void> {
     els.accountSince = $('account-since');
     els.accountScrapeStatus = $('account-scrape-status');
     els.accountScrapeLast = $('account-scrape-last');
+    els.pwCurrent = $('pw-current');
+    els.pwNew = $('pw-new');
+    els.pwConfirm = $('pw-confirm');
+    els.pwRevokeOthers = $('pw-revoke-others');
+    els.pwSubmit = $('pw-submit');
+    els.pwError = $('pw-error');
+    els.pwSuccess = $('pw-success');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
     els.sprintPointsText = $('sprint-points-text');

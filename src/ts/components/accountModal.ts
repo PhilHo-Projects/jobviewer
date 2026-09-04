@@ -1,7 +1,10 @@
 import { els } from '../dom';
-import { authClient } from '../auth';
+import { authClient, authErrorMessage } from '../auth';
 import { fetchScrapeInfo } from '../api';
-import { toAccountUser, formatDate, scrapeUsedToday, todayIso } from '../account';
+import {
+    toAccountUser, formatDate, scrapeUsedToday, todayIso,
+    validatePasswordChange, passwordProblemMessage,
+} from '../account';
 
 /**
  * Read fresh from the session on every open rather than caching a second copy of
@@ -59,7 +62,57 @@ async function renderScrape(): Promise<void> {
     }
 }
 
+function showPasswordMessage(el: HTMLElement | null, text: string): void {
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('hidden');
+}
+
+function clearPasswordMessages(): void {
+    els.pwError?.classList.add('hidden');
+    els.pwSuccess?.classList.add('hidden');
+}
+
+async function submitPasswordChange(): Promise<void> {
+    clearPasswordMessages();
+
+    const current = (els.pwCurrent as HTMLInputElement | null)?.value ?? '';
+    const next = (els.pwNew as HTMLInputElement | null)?.value ?? '';
+    const confirm = (els.pwConfirm as HTMLInputElement | null)?.value ?? '';
+    const revokeOtherSessions = !!(els.pwRevokeOthers as HTMLInputElement | null)?.checked;
+
+    // The server checks all of this again; this just saves the round trip.
+    const problem = validatePasswordChange(current, next, confirm);
+    if (problem) {
+        showPasswordMessage(els.pwError, passwordProblemMessage(problem));
+        return;
+    }
+
+    const btn = els.pwSubmit as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
+    const { error } = await authClient.changePassword({
+        currentPassword: current,
+        newPassword: next,
+        revokeOtherSessions,
+    });
+    if (btn) btn.disabled = false;
+
+    if (error) {
+        showPasswordMessage(els.pwError, authErrorMessage(error.code, 'Could not change the password.'));
+        return;
+    }
+
+    for (const field of [els.pwCurrent, els.pwNew, els.pwConfirm]) {
+        if (field) (field as HTMLInputElement).value = '';
+    }
+    showPasswordMessage(
+        els.pwSuccess,
+        revokeOtherSessions ? 'Password changed. Other devices were signed out.' : 'Password changed.',
+    );
+}
+
 export async function openAccountModal(): Promise<void> {
+    clearPasswordMessages();
     els.accountBackdrop?.classList.remove('hidden');
     await Promise.all([renderIdentity(), renderScrape()]);
 }
@@ -74,4 +127,11 @@ export function wireAccountModal(): void {
     els.accountBackdrop?.addEventListener('click', (e) => {
         if (e.target === els.accountBackdrop) closeAccountModal();
     });
+
+    els.pwSubmit?.addEventListener('click', () => { void submitPasswordChange(); });
+    for (const field of [els.pwCurrent, els.pwNew, els.pwConfirm]) {
+        field?.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter') void submitPasswordChange();
+        });
+    }
 }

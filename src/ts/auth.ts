@@ -23,6 +23,8 @@ export function authErrorMessage(code: string | undefined, fallback: string): st
         case 'INVALID_USERNAME_OR_PASSWORD':
         case 'INVALID_EMAIL_OR_PASSWORD':
             return 'That username and password do not match.';
+        case 'INVALID_PASSWORD':
+            return 'That current password is not right.';
         case 'USERNAME_IS_ALREADY_TAKEN':
         case 'USERNAME_IS_ALREADY_IN_USE':
             return 'That username is taken.';

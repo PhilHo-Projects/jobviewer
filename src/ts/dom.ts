@@ -79,7 +79,14 @@ export const els: Record<string, HTMLElement | null> = {
     accountEmail: null,
     accountSince: null,
     accountScrapeStatus: null,
-    accountScrapeLast: null
+    accountScrapeLast: null,
+    pwCurrent: null,
+    pwNew: null,
+    pwConfirm: null,
+    pwRevokeOthers: null,
+    pwSubmit: null,
+    pwError: null,
+    pwSuccess: null
 };
 
 export function $(id: string): HTMLElement | null {
