@@ -83,6 +83,8 @@ async function init(): Promise<void> {
     els.pwSubmit = $('pw-submit');
     els.pwError = $('pw-error');
     els.pwSuccess = $('pw-success');
+    els.sessionsList = $('sessions-list');
+    els.sessionsRevokeOthers = $('sessions-revoke-others');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
     els.sprintPointsText = $('sprint-points-text');

@@ -86,7 +86,9 @@ export const els: Record<string, HTMLElement | null> = {
     pwRevokeOthers: null,
     pwSubmit: null,
     pwError: null,
-    pwSuccess: null
+    pwSuccess: null,
+    sessionsList: null,
+    sessionsRevokeOthers: null
 };
 
 export function $(id: string): HTMLElement | null {

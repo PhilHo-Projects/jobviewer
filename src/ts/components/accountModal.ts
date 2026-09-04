@@ -3,8 +3,9 @@ import { authClient, authErrorMessage } from '../auth';
 import { fetchScrapeInfo } from '../api';
 import {
     toAccountUser, formatDate, scrapeUsedToday, todayIso,
-    validatePasswordChange, passwordProblemMessage,
+    validatePasswordChange, passwordProblemMessage, deviceLabel,
 } from '../account';
+import { escapeHtml } from '../utils';
 
 /**
  * Read fresh from the session on every open rather than caching a second copy of
@@ -109,12 +110,70 @@ async function submitPasswordChange(): Promise<void> {
         els.pwSuccess,
         revokeOtherSessions ? 'Password changed. Other devices were signed out.' : 'Password changed.',
     );
+    await renderSessions();
+}
+
+interface SessionRow {
+    token: string;
+    expiresAt: string | Date | null;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+}
+
+/**
+ * The current session gets no revoke button: signing yourself out is Log Out's
+ * job, not a list row's. If the client turns out not to expose the current
+ * token, `currentToken` is null and every row simply gets a button.
+ */
+function sessionRowHtml(s: SessionRow, isCurrent: boolean): string {
+    const control = isCurrent
+        ? '<span class="text-[10px] font-black uppercase tracking-widest text-theme-muted">This device</span>'
+        : `<button type="button" data-token="${escapeHtml(s.token)}"
+                class="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-[#ff0040] text-white border-2 border-black shadow-[2px_2px_0_#000] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none">
+            Revoke
+        </button>`;
+
+    return `
+    <div class="border-2 border-black shadow-[2px_2px_0_#000] p-3 flex justify-between items-center gap-3 bg-theme-card">
+      <div class="min-w-0">
+        <div class="text-sm font-black text-theme-primary truncate">${escapeHtml(deviceLabel(s.userAgent))}</div>
+        <div class="text-[11px] text-theme-muted truncate">
+          ${escapeHtml(s.ipAddress || 'No IP recorded')} · expires ${escapeHtml(formatDate(s.expiresAt))}
+        </div>
+      </div>
+      <div class="shrink-0">${control}</div>
+    </div>`;
+}
+
+async function renderSessions(): Promise<void> {
+    const list = els.sessionsList;
+    if (!list) return;
+    list.innerHTML = '<div class="text-sm text-theme-muted">Loading…</div>';
+
+    const [sessions, session] = await Promise.all([
+        authClient.listSessions(),
+        authClient.getSession(),
+    ]);
+
+    if (sessions.error || !sessions.data) {
+        list.innerHTML = '<div class="text-sm font-bold text-rose-500">Failed to load sessions.</div>';
+        return;
+    }
+
+    const currentToken = (session.data?.session as { token?: string } | undefined)?.token ?? null;
+    const rows = sessions.data as unknown as SessionRow[];
+    list.innerHTML = rows
+        .map((s) => sessionRowHtml(s, !!currentToken && s.token === currentToken))
+        .join('');
+
+    // Only this device is left, so there is nothing to sign out of.
+    els.sessionsRevokeOthers?.classList.toggle('hidden', rows.length <= 1);
 }
 
 export async function openAccountModal(): Promise<void> {
     clearPasswordMessages();
     els.accountBackdrop?.classList.remove('hidden');
-    await Promise.all([renderIdentity(), renderScrape()]);
+    await Promise.all([renderIdentity(), renderScrape(), renderSessions()]);
 }
 
 export function closeAccountModal(): void {
@@ -134,4 +193,25 @@ export function wireAccountModal(): void {
             if (e.key === 'Enter') void submitPasswordChange();
         });
     }
+
+    // Delegated, so re-rendering the list never stacks duplicate handlers.
+    els.sessionsList?.addEventListener('click', async (e) => {
+        const btn = (e.target as HTMLElement).closest('button[data-token]') as HTMLButtonElement | null;
+        if (!btn) return;
+        btn.disabled = true;
+        const { error } = await authClient.revokeSession({ token: btn.dataset.token ?? '' });
+        if (error) {
+            btn.disabled = false;
+            return;
+        }
+        await renderSessions();
+    });
+
+    els.sessionsRevokeOthers?.addEventListener('click', async () => {
+        const btn = els.sessionsRevokeOthers as HTMLButtonElement;
+        btn.disabled = true;
+        await authClient.revokeOtherSessions();
+        btn.disabled = false;
+        await renderSessions();
+    });
 }
