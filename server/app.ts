@@ -14,6 +14,7 @@ import {
 } from './repo.js';
 import { loadFixture, EMPTY_SCRAPE_INFO } from './fixture.js';
 import { registerAdminRoutes, pendingCount } from './admin.js';
+import { createRun, claimRun, countRunsToday, countUserRunsToday } from './scrape.js';
 import type { Job } from '../shared/types.js';
 
 export interface AppOptions {
@@ -58,16 +59,33 @@ export function createApp(db: Db, opts: AppOptions): Express {
         express.json({ limit: '20mb' }),
         requireWebhookSecret,
         (req: Request, res: Response) => {
-            const payload = req.body;
-            if (!Array.isArray(payload)) {
+            // A bare array is the scheduled workflow, which has no user context and
+            // delivers to the owner exactly as it always has. An object carrying a
+            // runId is a user-initiated scrape, and the run decides whose board it
+            // lands on — n8n never names the user.
+            const body = req.body;
+            const isBareArray = Array.isArray(body);
+            const runId: unknown = isBareArray ? undefined : body?.runId;
+            const incomingJobs: unknown = isBareArray ? body : body?.jobs;
+
+            if (!Array.isArray(incomingJobs)) {
                 return res.status(400).json({ error: 'Payload must be an array of jobs' });
             }
-            const ownerId = getOwnerId(db);
-            if (!ownerId) return res.status(500).json({ error: 'No owner configured' });
-            const incoming = payload.filter(Boolean);
-            const before = getJobs(db, ownerId).length;
-            upsertJobs(db, ownerId, incoming);
-            const after = getJobs(db, ownerId).length;
+
+            const targetId = runId
+                ? claimRun(db, String(runId), opts.config.runExpiryMinutes)
+                : getOwnerId(db);
+
+            if (!targetId) {
+                return runId
+                    ? res.status(409).json({ error: 'Unknown, consumed or expired run' })
+                    : res.status(500).json({ error: 'No owner configured' });
+            }
+
+            const incoming = incomingJobs.filter(Boolean);
+            const before = getJobs(db, targetId).length;
+            upsertJobs(db, targetId, incoming);
+            const after = getJobs(db, targetId).length;
             return res.status(201).json({
                 message: 'Jobs received successfully',
                 received: incoming.length, before, after,
@@ -177,19 +195,33 @@ export function createApp(db: Db, opts: AppOptions): Express {
 
     // --- n8n integrations ---
     app.post('/api/trigger-scrape', requireUser, async (req: AuthedRequest, res: Response) => {
+        // Caller-facing limits are checked before the server-side configuration guard,
+        // so a misconfigured webhook cannot mask "you already scraped today".
+        if (countUserRunsToday(db, req.user!.id) >= 1) {
+            return res.status(429).json({ error: 'Scrape already triggered today. Limit: 1 per day.' });
+        }
+        // Separate per-user scrapes multiply Apify cost linearly, so there is also a
+        // shared ceiling. Better a visible cap than a surprise empty balance.
+        if (countRunsToday(db) >= opts.config.scrapeDailyLimit) {
+            return res.status(429).json({
+                error: 'The shared daily scrape budget is spent. Try again tomorrow.',
+            });
+        }
+
         const webhookUrl = opts.config.n8nScrapeUrl;
         if (!webhookUrl) return res.status(500).json({ error: 'N8N_SCRAPE_URL is not configured' });
 
-        const info = getScrapeInfo(db, req.user!.id);
         const today = new Date().toISOString().split('T')[0];
-        if (info.lastTriggerDate === today) {
-            return res.status(429).json({ error: 'Scrape already triggered today. Limit: 1 per day.' });
-        }
+        const runId = createRun(db, req.user!.id);
         try {
-            const response = await fetch(webhookUrl, { method: 'GET' });
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ runId }),
+            });
             if (!response.ok) throw new Error(`n8n responded with status: ${response.status}`);
             setScrapeInfo(db, req.user!.id, today);
-            res.json({ message: 'Scrape triggered successfully', lastTriggerDate: today });
+            res.json({ message: 'Scrape triggered successfully', lastTriggerDate: today, runId });
         } catch (err: any) {
             console.error('Failed to trigger n8n:', err);
             res.status(500).json({ error: `Failed to trigger n8n: ${err.message}` });

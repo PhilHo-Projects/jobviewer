@@ -31,7 +31,8 @@ test('migrate leaves a fresh database at the post-cutover schema', () => {
     assert.ok(names.includes('history'));
     assert.ok(names.includes('scrape_info'));
     assert.ok(!names.includes('users'), 'the hand-rolled identity table is dropped');
-    assert.deepEqual(appliedVersions(db), [1, 2, 3]);
+    // Derived, not hardcoded, so adding a migration does not break this test.
+    assert.deepEqual(appliedVersions(db), MIGRATIONS.map((m) => m.version));
     db.close();
 });
 

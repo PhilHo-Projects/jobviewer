@@ -168,6 +168,20 @@ export const MIGRATIONS: Migration[] = [
             CREATE INDEX jobs_user_idx ON jobs(user_id);
         `,
     },
+    // Per-user scrape delivery. The app, not n8n, decides whose board a batch lands on.
+    {
+        version: 4,
+        sql: `
+            CREATE TABLE scrape_runs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES "user"("id"),
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                consumed_at TEXT
+            );
+            CREATE INDEX scrape_runs_user_idx ON scrape_runs(user_id, created_at);
+        `,
+    },
 ];
 
 export function appliedVersions(db: Db): number[] {
