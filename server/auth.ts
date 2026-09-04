@@ -1,147 +1,13 @@
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
 import type { Request, Response, NextFunction } from 'express';
 import type { Db } from './db.js';
-import type { SessionUser } from '../shared/types.js';
-import { getUserById, getDemoUser } from './repo.js';
+import { APIError, betterAuth } from 'better-auth';
+import { username as usernamePlugin } from 'better-auth/plugins';
+import type { AppConfig } from './config.js';
 
-const SCRYPT_KEYLEN = 64;
-
-export function hashPassword(plain: string): string {
-    const salt = crypto.randomBytes(16);
-    const hash = crypto.scryptSync(plain, salt, SCRYPT_KEYLEN);
-    return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
-}
-
-export function verifyPassword(plain: string, stored: string): boolean {
-    if (!stored || typeof stored !== 'string') return false;
-    const parts = stored.split('$');
-    if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
-    let salt: Buffer;
-    let expected: Buffer;
-    try {
-        salt = Buffer.from(parts[1], 'hex');
-        expected = Buffer.from(parts[2], 'hex');
-    } catch {
-        return false;
-    }
-    if (salt.length === 0 || expected.length === 0) return false;
-    const actual = crypto.scryptSync(plain, salt, expected.length);
-    if (actual.length !== expected.length) return false;
-    return crypto.timingSafeEqual(actual, expected);
-}
-
-export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-export function createSessionToken(userId: number, secret: string, ttlMs: number = SESSION_TTL_MS): string {
-    const expiry = Date.now() + ttlMs;
-    const uidB64 = Buffer.from(String(userId)).toString('base64url');
-    const payload = `${uidB64}.${expiry}`;
-    const sig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
-    return `${payload}.${sig}`;
-}
-
-export function verifySessionToken(token: string, secret: string): { userId: number } | null {
-    if (!token || typeof token !== 'string') return null;
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [uidB64, expiryStr, sig] = parts;
-
-    // BUG FIX: reject anything not exactly 64 lowercase hex chars BEFORE Buffer.from(hex),
-    // which would otherwise silently truncate a trailing junk char and let a tampered token pass.
-    if (!/^[0-9a-f]{64}$/.test(sig)) return null;
-
-    const payload = `${uidB64}.${expiryStr}`;
-    const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
-    const sigBuf = Buffer.from(sig, 'hex');
-    const expBuf = Buffer.from(expected, 'hex');
-    if (sigBuf.length !== expBuf.length) return null;
-    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
-
-    const expiry = Number(expiryStr);
-    if (!Number.isFinite(expiry) || expiry < Date.now()) return null;
-
-    const userId = Number(Buffer.from(uidB64, 'base64url').toString('utf8'));
-    if (!Number.isInteger(userId)) return null;
-    return { userId };
-}
-
-export const COOKIE_NAME = 'jv_session';
-
-export function loadOrCreateSecret(dataDir: string): string {
-    if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
-    const secretPath = path.join(dataDir, 'session.secret');
-    if (fs.existsSync(secretPath)) {
-        const existing = fs.readFileSync(secretPath, 'utf8').trim();
-        if (existing) return existing;
-    }
-    const secret = crypto.randomBytes(32).toString('hex');
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(secretPath, secret, 'utf8');
-    return secret;
-}
-
-export function parseCookies(header: string | undefined): Record<string, string> {
-    const out: Record<string, string> = {};
-    if (!header) return out;
-    for (const part of header.split(';')) {
-        const idx = part.indexOf('=');
-        if (idx === -1) continue;
-        const k = part.slice(0, idx).trim();
-        const v = part.slice(idx + 1).trim();
-        if (k) out[k] = decodeURIComponent(v);
-    }
-    return out;
-}
-
-function cookieFlags(basePath: string): string {
-    const secure = process.env.NODE_ENV === 'production' ? ' Secure;' : '';
-    return ` HttpOnly; SameSite=Lax;${secure} Path=${basePath}`;
-}
-
-export function buildSessionCookie(token: string, basePath: string): string {
-    const maxAge = Math.floor(SESSION_TTL_MS / 1000);
-    return `${COOKIE_NAME}=${token};${cookieFlags(basePath)}; Max-Age=${maxAge}`;
-}
-
-export function buildClearCookie(basePath: string): string {
-    return `${COOKIE_NAME}=;${cookieFlags(basePath)}; Max-Age=0`;
-}
-
-export interface AuthedRequest extends Request {
-    user?: SessionUser | null;
-    userId?: number | null;
-}
-
-export function attachUser(db: Db, secret: string) {
-    return (req: AuthedRequest, _res: Response, next: NextFunction): void => {
-        let user: SessionUser | null = null;
-        const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-        if (token) {
-            const verified = verifySessionToken(token, secret);
-            if (verified) {
-                const u = getUserById(db, verified.userId);
-                if (u && u.role === 'owner') user = u;
-            }
-        }
-        if (!user) user = getDemoUser(db);
-        req.user = user;
-        req.userId = user ? user.id : null;
-        next();
-    };
-}
-
-export function requireOwner(req: AuthedRequest, res: Response, next: NextFunction): void {
-    if (!req.user || req.user.role !== 'owner') {
-        res.status(403).json({ error: 'Forbidden' });
-        return;
-    }
-    next();
-}
-
-export function requireWebhookSecret(req: Request, res: Response, next: NextFunction): void {
-    const expected = process.env.WEBHOOK_SECRET;
+export function makeRequireWebhookSecret(expectedSecret: string) {
+  return function requireWebhookSecret(req: Request, res: Response, next: NextFunction): void {
+    const expected = expectedSecret;
     const provided = req.headers['x-webhook-secret'];
     if (!expected || typeof provided !== 'string') {
         res.status(403).json({ error: 'Forbidden' });
@@ -154,4 +20,138 @@ export function requireWebhookSecret(req: Request, res: Response, next: NextFunc
         return;
     }
     next();
+  };
 }
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type UserRole = 'member' | 'owner';
+
+/** The shape `auth.api.getSession()` hands back, narrowed to what this app uses. */
+export interface SessionUser {
+    id: string;
+    username: string;
+    displayUsername: string | null;
+    email: string;
+    role: UserRole;
+    approvalStatus: ApprovalStatus;
+}
+
+/**
+ * Better Auth owns identity entirely; there is no second auth path.
+ *
+ * It is handed the app's own better-sqlite3 connection, so its tables live in the same
+ * file as the job data. That is what lets `jobs.user_id` be a real foreign key, and it
+ * means one backup covers both.
+ */
+export function buildAuth({ db, config }: { db: Db; config: AppConfig }) {
+    const isProduction = config.environment === 'production';
+
+    return betterAuth({
+        database: db,
+        secret: config.sessionSecret,
+        baseURL: config.publicOrigin,
+        trustedOrigins: [config.publicOrigin],
+
+        emailAndPassword: {
+            enabled: true,
+            // Sign-up must never mint a session. Together with the gate below, this is
+            // what guarantees a pending user never holds one at any point.
+            autoSignIn: false,
+            minPasswordLength: 12,
+            // The address is collected but deliberately never verified — the owner's
+            // approval is the human check, so there is no SMTP dependency in this app.
+            requireEmailVerification: false,
+        },
+
+        session: { expiresIn: config.sessionMaxAgeSeconds },
+
+        user: {
+            additionalFields: {
+                // `input: false` marks these server-owned: Better Auth strips them from
+                // any request body, so a sign-up POST carrying `"role":"owner"` cannot
+                // escalate. Closed by construction rather than by vigilance.
+                role: { type: 'string', required: true, defaultValue: 'member', input: false },
+                approvalStatus: {
+                    type: 'string', required: true, defaultValue: 'pending', input: false,
+                },
+                approvedAt: { type: 'string', required: false, input: false },
+                approvedBy: { type: 'string', required: false, input: false },
+            },
+        },
+
+        databaseHooks: {
+            session: {
+                create: {
+                    /**
+                     * The approval gate, and the only one in the codebase.
+                     *
+                     * Because it sits at session creation, the existence of a session
+                     * proves the user is approved — no downstream route re-checks, and
+                     * there is no half-authenticated state for a bug to hide in.
+                     */
+                    before: async (session) => {
+                        const row = db
+                            .prepare('SELECT "approvalStatus" FROM "user" WHERE "id" = ?')
+                            .get(session.userId) as { approvalStatus?: string } | undefined;
+
+                        if (row?.approvalStatus === 'pending') {
+                            throw new APIError('FORBIDDEN', {
+                                code: 'ACCOUNT_PENDING',
+                                message: 'This account is waiting to be approved.',
+                            });
+                        }
+                        if (row?.approvalStatus !== 'approved') {
+                            throw new APIError('FORBIDDEN', {
+                                code: 'ACCOUNT_REJECTED',
+                                message: 'This account cannot sign in.',
+                            });
+                        }
+                        return { data: session };
+                    },
+                },
+            },
+        },
+
+        rateLimit: {
+            enabled: true,
+            // Database storage, so counters survive a restart instead of resetting to
+            // zero on every deploy the way an in-process limiter does.
+            storage: 'database',
+            window: 60,
+            max: 100,
+            customRules: {
+                '/sign-in/username': { window: 15 * 60, max: 5 },
+                '/sign-in/email': { window: 15 * 60, max: 5 },
+                // Public sign-up is a spam vector the old single-password login never had.
+                '/sign-up/email': { window: 60 * 60, max: 3 },
+            },
+        },
+
+        advanced: {
+            /**
+             * Counterintuitive but deliberate: `useSecureCookies` controls only Better
+             * Auth's automatic `__Secure-` name prefix, not the Secure attribute itself.
+             * Leaving it false and setting `secure` explicitly below is the only way to
+             * get a literal `__Host-` name — with it true the cookie is emitted as
+             * `__Secure-__Host-jv_session`, which browsers read as a plain `__Secure-`
+             * cookie, silently losing the subdomain-overwrite guarantee.
+             */
+            useSecureCookies: false,
+            defaultCookieAttributes: {
+                httpOnly: true,
+                sameSite: 'strict',
+                path: '/',
+                secure: isProduction,
+            },
+            cookies: {
+                // `__Host-` additionally requires Secure, Path=/ and no Domain — all
+                // satisfied above. It is dropped outside production, where Secure is not set.
+                session_token: { name: isProduction ? '__Host-jv_session' : 'jv_session' },
+            },
+        },
+
+        plugins: [usernamePlugin({ minUsernameLength: 3, maxUsernameLength: 30 })],
+    });
+}
+
+export type AppAuth = ReturnType<typeof buildAuth>;

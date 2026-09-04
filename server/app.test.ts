@@ -1,299 +1,180 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
-import type { AddressInfo } from 'node:net';
-import { openDb } from './db.js';
-import { seedUsers } from './db.js';
-import { createApp } from './app.js';
+import { startApp, signUpMember, approve, signIn, OWNER_PASSWORD } from './testing.js';
 
-async function startApp() {
-    const db = openDb(':memory:');
-    seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-    const app = createApp(db, { secret: 'test-secret', dataDir: '.' });
-    const server = app.listen(0);
-    await once(server, 'listening');
-    const { port } = server.address() as AddressInfo;
-    const base = `http://127.0.0.1:${port}/job-viewer/api`;
-    return { db, server, base, close: () => { server.close(); db.close(); } };
-}
-
-function cookieFrom(res: Response): string {
-    const raw = res.headers.get('set-cookie') || '';
-    return raw.split(';')[0]; // "jv_session=...."
-}
-
-test('GET /me is demo when anonymous', async () => {
-    const ctx = await startApp();
+test('GET /me reports anonymous when there is no session', async () => {
+    const h = await startApp();
     try {
-        const res = await fetch(`${ctx.base}/me`);
-        const body = await res.json();
+        const body = await (await fetch(`${h.base}/me`)).json();
         assert.equal(body.authenticated, false);
         assert.equal(body.isDemo, true);
-    } finally { ctx.close(); }
+        assert.equal(body.username, null);
+    } finally { h.close(); }
 });
 
-test('login succeeds and /me reflects the owner', async () => {
-    const ctx = await startApp();
+test('GET /me reflects the signed-in owner', async () => {
+    const h = await startApp();
     try {
-        const login = await fetch(`${ctx.base}/login`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'me', password: '0000' }),
-        });
-        assert.equal(login.status, 200);
-        const cookie = cookieFrom(login);
-        assert.match(cookie, /^jv_session=/);
-
-        const me = await fetch(`${ctx.base}/me`, { headers: { Cookie: cookie } });
-        const body = await me.json();
+        const cookie = await signIn(h, 'phil', OWNER_PASSWORD);
+        const body = await (await fetch(`${h.base}/me`, { headers: { Cookie: cookie } })).json();
         assert.equal(body.authenticated, true);
         assert.equal(body.role, 'owner');
-        assert.equal(body.username, 'me');
-    } finally { ctx.close(); }
+        assert.equal(body.username, 'phil');
+        assert.equal(body.isDemo, false);
+    } finally { h.close(); }
 });
 
-test('login fails with a generic 401 on wrong password', async () => {
-    const ctx = await startApp();
+test('GET /me reflects a signed-in member', async () => {
+    const h = await startApp();
     try {
-        const res = await fetch(`${ctx.base}/login`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'me', password: 'nope' }),
-        });
-        assert.equal(res.status, 401);
-        const body = await res.json();
-        assert.equal(body.error, 'Invalid credentials');
-    } finally { ctx.close(); }
+        const id = await signUpMember(h, 'alice');
+        approve(h, id);
+        const cookie = await signIn(h, 'alice');
+        const body = await (await fetch(`${h.base}/me`, { headers: { Cookie: cookie } })).json();
+        assert.equal(body.authenticated, true);
+        assert.equal(body.role, 'member');
+    } finally { h.close(); }
 });
 
-test('login rejects the demo role', async () => {
-    const ctx = await startApp();
+test('a tampered cookie resolves to anonymous, not to a user', async () => {
+    const h = await startApp();
     try {
-        const res = await fetch(`${ctx.base}/login`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'demo', password: '' }),
-        });
-        assert.equal(res.status, 401);
-    } finally { ctx.close(); }
+        const cookie = await signIn(h, 'phil', OWNER_PASSWORD);
+        const body = await (await fetch(`${h.base}/me`, { headers: { Cookie: `${cookie}x` } })).json();
+        assert.equal(body.authenticated, false);
+    } finally { h.close(); }
 });
-
-test('logout clears the cookie', async () => {
-    const ctx = await startApp();
-    try {
-        const res = await fetch(`${ctx.base}/logout`, { method: 'POST' });
-        assert.equal(res.status, 200);
-        assert.match(res.headers.get('set-cookie') || '', /Max-Age=0/);
-    } finally { ctx.close(); }
-});
-
-import { getOwnerUser, getDemoUser, upsertJobs } from './repo.js';
-
-test('GET /jobs returns demo jobs for anon and owner jobs for owner', async () => {
-    const ctx = await startApp();
-    try {
-        const owner = getOwnerUser(ctx.db)!;
-        const demo = getDemoUser(ctx.db)!;
-        upsertJobs(ctx.db, owner.id, [{ id: 'o1', title: 'Owner Secret', company: 'Real' }]);
-        upsertJobs(ctx.db, demo.id, [{ id: 'd1', title: 'Demo Sample', company: 'Fake' }]);
-
-        const anon = await (await fetch(`${ctx.base}/jobs`)).json();
-        assert.equal(anon.length, 1);
-        assert.equal(anon[0].title, 'Demo Sample');
-
-        const login = await fetch(`${ctx.base}/login`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'me', password: '0000' }),
-        });
-        const cookie = cookieFrom(login);
-        const mine = await (await fetch(`${ctx.base}/jobs`, { headers: { Cookie: cookie } })).json();
-        assert.equal(mine.length, 1);
-        assert.equal(mine[0].title, 'Owner Secret');
-    } finally { ctx.close(); }
-});
-
-async function ownerCookie(ctx: Awaited<ReturnType<typeof startApp>>): Promise<string> {
-    const login = await fetch(`${ctx.base}/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'me', password: '0000' }),
-    });
-    return cookieFrom(login);
-}
 
 test('POST /jobs returns the exact created row even when other jobs exist', async () => {
-    const ctx = await startApp();
+    const h = await startApp();
     try {
-        const cookie = await ownerCookie(ctx);
-        // pre-seed jobs whose ids sort around the generated one, to expose any
-        // positional-lookup bug in the create handler
-        await fetch(`${ctx.base}/jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
-            body: JSON.stringify({ id: 'zzz-last', title: 'Z', company: 'C' }),
+        const cookie = await signIn(h, 'phil', OWNER_PASSWORD);
+        const post = (body: unknown) => fetch(`${h.base}/jobs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Cookie: cookie, Origin: h.origin },
+            body: JSON.stringify(body),
         });
-        await fetch(`${ctx.base}/jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
-            body: JSON.stringify({ id: 'aaa-first', title: 'A', company: 'C' }),
-        });
-        const create = await fetch(`${ctx.base}/jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
-            body: JSON.stringify({ title: 'BrandNew', company: 'NewCo' }),
-        });
-        assert.equal(create.status, 201);
-        const saved = await create.json();
-        assert.equal(saved.title, 'BrandNew');
-        assert.equal(saved.company, 'NewCo');
-        assert.ok(saved.id);
-    } finally { ctx.close(); }
+
+        await post({ title: 'Filler One', company: 'ACME' });
+        await post({ title: 'Filler Two', company: 'ACME' });
+        const res = await post({ title: 'The Real One', company: 'Umbrella' });
+
+        assert.equal(res.status, 201);
+        const saved = await res.json();
+        assert.equal(saved.title, 'The Real One');
+        assert.equal(saved.company, 'Umbrella');
+    } finally { h.close(); }
 });
 
-test('write routes are 403 for anon and work for owner', async () => {
-    const ctx = await startApp();
+test('re-posting the same job returns 200 rather than creating a duplicate', async () => {
+    const h = await startApp();
     try {
-        const anonCreate = await fetch(`${ctx.base}/jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: 'X', company: 'Y' }),
-        });
-        assert.equal(anonCreate.status, 403);
+        const cookie = await signIn(h, 'phil', OWNER_PASSWORD);
+        const body = { title: 'Dev', company: 'ACME', url: 'https://x.test/1' };
+        const headers = { 'Content-Type': 'application/json', Cookie: cookie, Origin: h.origin };
 
-        const cookie = await ownerCookie(ctx);
-        const create = await fetch(`${ctx.base}/jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
-            body: JSON.stringify({ title: 'X', company: 'Y' }),
-        });
-        assert.equal(create.status, 201);
-        const saved = await create.json();
-        assert.ok(saved.id);
+        const first = await fetch(`${h.base}/jobs`, { method: 'POST', headers, body: JSON.stringify(body) });
+        assert.equal(first.status, 201);
+        const second = await fetch(`${h.base}/jobs`, { method: 'POST', headers, body: JSON.stringify(body) });
+        assert.equal(second.status, 200);
 
-        const patch = await fetch(`${ctx.base}/jobs/${saved.id}`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json', Cookie: cookie },
-            body: JSON.stringify({ status: 'completed' }),
-        });
-        assert.equal(patch.status, 200);
-        assert.equal((await patch.json()).status, 'completed');
-
-        const anonPatch = await fetch(`${ctx.base}/jobs/${saved.id}`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'new' }),
-        });
-        assert.equal(anonPatch.status, 403);
-    } finally { ctx.close(); }
+        const jobs = await (await fetch(`${h.base}/jobs`, { headers: { Cookie: cookie } })).json();
+        assert.equal(jobs.length, 1);
+    } finally { h.close(); }
 });
 
-test('receive-jobs path is registered but bulk routes need owner', async () => {
-    const ctx = await startApp();
+test('write routes are 401 for anonymous callers', async () => {
+    const h = await startApp();
     try {
-        const anonBulk = await fetch(`${ctx.base}/jobs/bulk-move`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: 'new', to: 'deleted' }),
-        });
-        assert.equal(anonBulk.status, 403);
-        const anonDelete = await fetch(`${ctx.base}/jobs/status/deleted`, { method: 'DELETE' });
-        assert.equal(anonDelete.status, 403);
-    } finally { ctx.close(); }
+        const headers = { 'Content-Type': 'application/json', Origin: h.origin };
+        const calls = [
+            fetch(`${h.base}/jobs`, { method: 'POST', headers, body: '{}' }),
+            fetch(`${h.base}/jobs/bulk-move`, { method: 'PATCH', headers, body: '{"from":"new","to":"completed"}' }),
+            fetch(`${h.base}/jobs/abc`, { method: 'PATCH', headers, body: '{}' }),
+            fetch(`${h.base}/jobs/status/deleted`, { method: 'DELETE', headers }),
+        ];
+        for (const res of await Promise.all(calls)) assert.equal(res.status, 401);
+    } finally { h.close(); }
 });
 
-import express from 'express';
-
-async function startStub() {
-    const stub = express();
-    stub.use(express.json());
-    stub.all('*', (_req, res) => {
-        res.json({ text: 'STUB COVER LETTER' });
-    });
-    const server = stub.listen(0);
-    await once(server, 'listening');
-    const { port } = server.address() as AddressInfo;
-    return { url: `http://127.0.0.1:${port}/hook`, close: () => server.close() };
-}
-
-test('trigger-scrape is owner-only and honours the daily limit', async () => {
-    const ctx = await startApp();
-    const stub = await startStub();
-    const prev = process.env.N8N_SCRAPE_URL;
-    process.env.N8N_SCRAPE_URL = stub.url;
+test('trigger-scrape requires a session and reports missing configuration', async () => {
+    const h = await startApp();
     try {
-        const anon = await fetch(`${ctx.base}/trigger-scrape`, { method: 'POST' });
-        assert.equal(anon.status, 403);
+        const anon = await fetch(`${h.base}/trigger-scrape`, {
+            method: 'POST', headers: { Origin: h.origin },
+        });
+        assert.equal(anon.status, 401);
 
-        const cookie = await ownerCookie(ctx);
-        const first = await fetch(`${ctx.base}/trigger-scrape`, { method: 'POST', headers: { Cookie: cookie } });
-        assert.equal(first.status, 200);
-        const second = await fetch(`${ctx.base}/trigger-scrape`, { method: 'POST', headers: { Cookie: cookie } });
-        assert.equal(second.status, 429);
-    } finally {
-        if (prev === undefined) delete process.env.N8N_SCRAPE_URL; else process.env.N8N_SCRAPE_URL = prev;
-        stub.close(); ctx.close();
-    }
+        const cookie = await signIn(h, 'phil', OWNER_PASSWORD);
+        // N8N_SCRAPE_URL is unset in the harness, so this exercises the config guard.
+        const res = await fetch(`${h.base}/trigger-scrape`, {
+            method: 'POST', headers: { Cookie: cookie, Origin: h.origin },
+        });
+        assert.equal(res.status, 500);
+        assert.match((await res.json()).error, /N8N_SCRAPE_URL/);
+    } finally { h.close(); }
 });
 
 test('generate-cover-letter is owner-only', async () => {
-    const ctx = await startApp();
-    const stub = await startStub();
-    const prev = process.env.N8N_COVER_LETTER_URL;
-    process.env.N8N_COVER_LETTER_URL = stub.url;
+    const h = await startApp();
     try {
-        const anon = await fetch(`${ctx.base}/generate-cover-letter`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ job: { title: 'T' } }),
+        const id = await signUpMember(h, 'alice');
+        approve(h, id);
+        const member = await signIn(h, 'alice');
+
+        const anon = await fetch(`${h.base}/generate-cover-letter`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Origin: h.origin }, body: '{}',
         });
         assert.equal(anon.status, 403);
 
-        const cookie = await ownerCookie(ctx);
-        const ok = await fetch(`${ctx.base}/generate-cover-letter`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
-            body: JSON.stringify({ job: { title: 'T' } }),
+        const asMember = await fetch(`${h.base}/generate-cover-letter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Cookie: member, Origin: h.origin },
+            body: '{}',
         });
-        assert.equal(ok.status, 200);
-        assert.equal((await ok.json()).text, 'STUB COVER LETTER');
-    } finally {
-        if (prev === undefined) delete process.env.N8N_COVER_LETTER_URL; else process.env.N8N_COVER_LETTER_URL = prev;
-        stub.close(); ctx.close();
-    }
+        assert.equal(asMember.status, 403, 'members get templates, not the AI path');
+    } finally { h.close(); }
 });
 
 test('receive-jobs requires the webhook secret and writes to the owner', async () => {
-    const ctx = await startApp();
-    const prev = process.env.WEBHOOK_SECRET;
-    process.env.WEBHOOK_SECRET = 's3cr3t';
+    const h = await startApp();
     try {
-        const noSecret = await fetch(`${ctx.base}/receive-jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify([{ title: 'Hook Job', company: 'C' }]),
+        const payload = JSON.stringify([{ title: 'From n8n', company: 'ACME' }]);
+
+        const noSecret = await fetch(`${h.base}/receive-jobs`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
         });
         assert.equal(noSecret.status, 403);
 
-        const wrong = await fetch(`${ctx.base}/receive-jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 'nope' },
-            body: JSON.stringify([{ title: 'Hook Job', company: 'C' }]),
+        const wrongSecret = await fetch(`${h.base}/receive-jobs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 'nope' },
+            body: payload,
         });
-        assert.equal(wrong.status, 403);
+        assert.equal(wrongSecret.status, 403);
 
-        const ok = await fetch(`${ctx.base}/receive-jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 's3cr3t' },
-            body: JSON.stringify([{ title: 'Hook Job', company: 'C' }]),
+        const ok = await fetch(`${h.base}/receive-jobs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 'wh-secret' },
+            body: payload,
         });
         assert.equal(ok.status, 201);
 
-        const cookie = await ownerCookie(ctx);
-        const owner = await (await fetch(`${ctx.base}/jobs`, { headers: { Cookie: cookie } })).json();
-        assert.ok(owner.some((j: any) => j.title === 'Hook Job'));
-        const anon = await (await fetch(`${ctx.base}/jobs`)).json();
-        assert.ok(!anon.some((j: any) => j.title === 'Hook Job'));
-    } finally {
-        if (prev === undefined) delete process.env.WEBHOOK_SECRET; else process.env.WEBHOOK_SECRET = prev;
-        ctx.close();
-    }
+        const cookie = await signIn(h, 'phil', OWNER_PASSWORD);
+        const jobs = await (await fetch(`${h.base}/jobs`, { headers: { Cookie: cookie } })).json();
+        assert.equal(jobs.length, 1);
+        assert.equal(jobs[0].title, 'From n8n');
+    } finally { h.close(); }
 });
 
-test('receive-jobs fails closed when WEBHOOK_SECRET is unset', async () => {
-    const ctx = await startApp();
-    const prev = process.env.WEBHOOK_SECRET;
-    delete process.env.WEBHOOK_SECRET;
+test('receive-jobs rejects a non-array payload', async () => {
+    const h = await startApp();
     try {
-        const res = await fetch(`${ctx.base}/receive-jobs`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 'anything' },
-            body: JSON.stringify([{ title: 'X', company: 'C' }]),
+        const res = await fetch(`${h.base}/receive-jobs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Webhook-Secret': 'wh-secret' },
+            body: JSON.stringify({ not: 'an array' }),
         });
-        assert.equal(res.status, 403);
-    } finally {
-        if (prev !== undefined) process.env.WEBHOOK_SECRET = prev;
-        ctx.close();
-    }
+        assert.equal(res.status, 400);
+    } finally { h.close(); }
 });

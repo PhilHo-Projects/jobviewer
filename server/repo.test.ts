@@ -1,9 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openDb } from './db.js';
-import { seedUsers } from './db.js';
-import { getUserById, getDemoUser, getOwnerUser, getUserByUsername } from './repo.js';
-import { verifyPassword } from './auth.js';
+import { openDb, type Db } from './db.js';
+import {
+    getOwnerId, getJobs, getJobById, upsertJobs, patchJob, bulkMove, deleteByStatus,
+    getHistory, insertHistory, getScrapeInfo, setScrapeInfo, createStableJobId,
+} from './repo.js';
+
+/**
+ * Insert a bare user row. For suites exercising job data rather than auth, where a job
+ * needs an owner but going through sign-up would only add noise.
+ */
+function seedUserRow(db: Db, username: string, role: 'member' | 'owner' = 'member'): string {
+    const id = `u-${username}`;
+    db.prepare(
+        `INSERT OR IGNORE INTO "user" ("id","name","email","emailVerified","createdAt","updatedAt",
+            "username","displayUsername","role","approvalStatus")
+         VALUES (?,?,?,0,?,?,?,?,?,'approved')`,
+    ).run(id, username, `${username}@example.test`, '2026-01-01', '2026-01-01', username, username, role);
+    return id;
+}
 
 test('openDb creates the expected tables', () => {
     const db = openDb(':memory:');
@@ -11,232 +26,112 @@ test('openDb creates the expected tables', () => {
         .prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
         .all()
         .map((r: any) => r.name);
-    assert.ok(names.includes('users'));
+    assert.ok(names.includes('user'), 'better-auth identity table');
     assert.ok(names.includes('jobs'));
     assert.ok(names.includes('history'));
     assert.ok(names.includes('scrape_info'));
+    assert.ok(!names.includes('users'), 'the hand-rolled identity table is gone');
     db.close();
 });
 
-test('seedUsers creates owner and demo with defaults', () => {
+test('getOwnerId finds the owner and ignores members', () => {
     const db = openDb(':memory:');
-    seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-    const owner = getOwnerUser(db)!;
-    const demo = getDemoUser(db)!;
-    assert.equal(owner.role, 'owner');
-    assert.equal(owner.username, 'me');
-    assert.equal(demo.role, 'demo');
-    const ownerLogin = getUserByUsername(db, 'me')!;
-    assert.equal(verifyPassword('0000', ownerLogin.password_hash!), true);
+    seedUserRow(db, 'alice');
+    assert.equal(getOwnerId(db), null);
+    const ownerId = seedUserRow(db, 'phil', 'owner');
+    assert.equal(getOwnerId(db), ownerId);
     db.close();
 });
 
-test('seedUsers is idempotent and non-destructive', () => {
+test('createStableJobId is stable for the same content', () => {
+    const job = { url: 'https://x.test/1', title: 'Dev', company: 'ACME' };
+    assert.equal(createStableJobId(job), createStableJobId({ ...job }));
+});
+
+test('jobs are scoped per user and do not collide on a shared id', () => {
     const db = openDb(':memory:');
-    seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-    const owner = getOwnerUser(db)!;
-    db.prepare(`UPDATE users SET password_hash=? WHERE id=?`)
-        .run('scrypt$dead$beef', owner.id);
-    seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-    const after = getUserByUsername(db, 'me')!;
-    assert.equal(after.password_hash, 'scrypt$dead$beef');
-    assert.equal(db.prepare(`SELECT COUNT(*) c FROM users WHERE role='owner'`).get().c, 1);
-    assert.equal(db.prepare(`SELECT COUNT(*) c FROM users WHERE role='demo'`).get().c, 1);
+    const alice = seedUserRow(db, 'alice');
+    const bob = seedUserRow(db, 'bob');
+
+    // Identical content, so both users get the same sha1 id — the composite primary
+    // key is what keeps them apart.
+    const job = { url: 'https://x.test/1', title: 'Dev', company: 'ACME' };
+    upsertJobs(db, alice, [{ ...job, notes: 'alice note' }]);
+    upsertJobs(db, bob, [{ ...job, notes: 'bob note' }]);
+
+    assert.equal(getJobs(db, alice).length, 1);
+    assert.equal(getJobs(db, bob).length, 1);
+    assert.equal(getJobs(db, alice)[0].notes, 'alice note');
+    assert.equal(getJobs(db, bob)[0].notes, 'bob note');
     db.close();
 });
 
-test('seedUsers updates username only while still the default placeholder', () => {
+test('upsert preserves owner notes on re-delivery', () => {
     const db = openDb(':memory:');
-    seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-    seedUsers(db, { adminUsername: 'phil', adminPassword: '0000' });
-    assert.ok(getUserByUsername(db, 'phil'));
-    seedUsers(db, { adminUsername: 'someone-else', adminPassword: '0000' });
-    assert.equal(getUserByUsername(db, 'someone-else'), null);
-    assert.ok(getUserByUsername(db, 'phil'));
+    const alice = seedUserRow(db, 'alice');
+    const job = { url: 'https://x.test/1', title: 'Dev', company: 'ACME' };
+    upsertJobs(db, alice, [job]);
+    const id = createStableJobId(job);
+    patchJob(db, alice, id, { notes: 'my thoughts' });
+
+    // n8n re-delivers the same job; the note must survive.
+    upsertJobs(db, alice, [job]);
+    assert.equal(getJobById(db, alice, id)!.notes, 'my thoughts');
     db.close();
 });
 
-test('getUserById returns null for unknown id', () => {
+test('patchJob returns null for a job the user does not own', () => {
     const db = openDb(':memory:');
-    assert.equal(getUserById(db, 999), null);
+    const alice = seedUserRow(db, 'alice');
+    const bob = seedUserRow(db, 'bob');
+    upsertJobs(db, alice, [{ title: 'Dev', company: 'ACME' }]);
+    const id = getJobs(db, alice)[0].id;
+    assert.equal(patchJob(db, bob, id, { notes: 'nope' }), null);
     db.close();
 });
 
-import { upsertJobs, getJobs, getJobById, patchJob, bulkMove, deleteByStatus } from './repo.js';
-
-function seededDb() {
+test('bulkMove and deleteByStatus only touch the calling user', () => {
     const db = openDb(':memory:');
-    seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-    return db;
-}
+    const alice = seedUserRow(db, 'alice');
+    const bob = seedUserRow(db, 'bob');
+    upsertJobs(db, alice, [{ title: 'A', company: 'ACME', status: 'new' }]);
+    upsertJobs(db, bob, [{ title: 'B', company: 'ACME', status: 'new' }]);
 
-test('upsertJobs assigns a stable id and getJobs is scoped per user', () => {
-    const db = seededDb();
-    const owner = getOwnerUser(db)!;
-    const demo = getDemoUser(db)!;
+    assert.equal(bulkMove(db, alice, 'new', 'completed'), 1);
+    assert.equal(getJobs(db, bob)[0].status, 'new');
 
-    upsertJobs(db, owner.id, [{ title: 'Owner Job', company: 'Acme' }]);
-    upsertJobs(db, demo.id, [{ title: 'Demo Job', company: 'Globex' }]);
-
-    const ownerJobs = getJobs(db, owner.id);
-    const demoJobs = getJobs(db, demo.id);
-    assert.equal(ownerJobs.length, 1);
-    assert.equal(demoJobs.length, 1);
-    assert.equal(ownerJobs[0].title, 'Owner Job');
-    assert.equal(demoJobs[0].title, 'Demo Job');
-    assert.ok(ownerJobs[0].id);
+    upsertJobs(db, alice, [{ title: 'C', company: 'ACME', status: 'deleted' }]);
+    assert.equal(deleteByStatus(db, alice, 'deleted'), 1);
+    assert.equal(getJobs(db, bob).length, 1);
     db.close();
 });
 
-test('upsertJobs merges existing rows without clobbering status/notes', () => {
-    const db = seededDb();
-    const owner = getOwnerUser(db)!;
-    const [created] = upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', status: 'in_progress', notes: 'mine' }]);
-    assert.equal(created.status, 'in_progress');
-    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T2', company: 'C', status: 'new', notes: '' }]);
-    const after = getJobById(db, owner.id, 'j1')!;
-    assert.equal(after.status, 'in_progress');
-    assert.equal(after.notes, 'mine');
-    assert.equal(after.title, 'T2');
-    db.close();
-});
-
-test('upsertJobs does not resurrect notes the owner deliberately cleared', () => {
-    const db = seededDb();
-    const owner = getOwnerUser(db)!;
-    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', notes: '' }]);
-    // a re-delivered job that carries notes must NOT overwrite the owner's empty notes
-    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', notes: 'from scraper' }]);
-    assert.equal(getJobById(db, owner.id, 'j1')!.notes, '');
-    db.close();
-});
-
-test('patchJob updates only the given fields and is user-scoped', () => {
-    const db = seededDb();
-    const owner = getOwnerUser(db)!;
-    const demo = getDemoUser(db)!;
-    upsertJobs(db, owner.id, [{ id: 'j1', title: 'T', company: 'C', status: 'new' }]);
-
-    const updated = patchJob(db, owner.id, 'j1', { status: 'completed', statusSummary: 'Rejected' });
-    assert.equal(updated!.status, 'completed');
-    assert.equal(updated!.statusSummary, 'Rejected');
-
-    assert.equal(getJobById(db, demo.id, 'j1'), null);
-    assert.equal(patchJob(db, demo.id, 'j1', { status: 'new' }), null);
-    db.close();
-});
-
-test('bulkMove and deleteByStatus are user-scoped', () => {
-    const db = seededDb();
-    const owner = getOwnerUser(db)!;
-    upsertJobs(db, owner.id, [
-        { id: 'a', title: 'A', company: 'C', status: 'new' },
-        { id: 'b', title: 'B', company: 'C', status: 'new' },
-        { id: 'c', title: 'C', company: 'C', status: 'deleted' },
+test('getJobs orders newest scrape first', () => {
+    const db = openDb(':memory:');
+    const alice = seedUserRow(db, 'alice');
+    upsertJobs(db, alice, [
+        { title: 'Old', company: 'ACME', scrapedDate: '2026-01-01T00:00:00.000Z' },
+        { title: 'New', company: 'ACME', scrapedDate: '2026-06-01T00:00:00.000Z' },
     ]);
-    assert.equal(bulkMove(db, owner.id, 'new', 'deleted'), 2);
-    assert.equal(deleteByStatus(db, owner.id, 'deleted'), 3);
-    assert.equal(getJobs(db, owner.id).length, 0);
+    assert.equal(getJobs(db, alice)[0].title, 'New');
     db.close();
 });
 
-import { getHistory, getScrapeInfo, setScrapeInfo, insertHistory } from './repo.js';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { migrateFromJson } from './db.js';
-import { getJobs as repoGetJobs } from './repo.js';
+test('history and scrape info are scoped per user', () => {
+    const db = openDb(':memory:');
+    const alice = seedUserRow(db, 'alice');
+    const bob = seedUserRow(db, 'bob');
 
-test('history is user-scoped', () => {
-    const db = seededDb();
-    const owner = getOwnerUser(db)!;
-    const demo = getDemoUser(db)!;
-    insertHistory(db, owner.id, {
-        date: '2026-06-01', wins: [{ title: 'A', company: 'C' }],
-        basePoints: 5, scoreMultiplier: 1, totalPoints: 5,
+    insertHistory(db, alice, {
+        date: '2026-01-01', wins: [{ title: 'Dev', company: 'ACME' }],
+        basePoints: 10, scoreMultiplier: 1.5, totalPoints: 15,
     });
-    assert.equal(getHistory(db, owner.id).length, 1);
-    assert.equal(getHistory(db, owner.id)[0].wins[0].title, 'A');
-    assert.equal(getHistory(db, demo.id).length, 0);
+    assert.equal(getHistory(db, alice).length, 1);
+    assert.equal(getHistory(db, alice)[0].wins[0].company, 'ACME');
+    assert.equal(getHistory(db, bob).length, 0);
+
+    setScrapeInfo(db, alice, '2026-02-02');
+    assert.equal(getScrapeInfo(db, alice).lastTriggerDate, '2026-02-02');
+    assert.equal(getScrapeInfo(db, bob).lastTriggerDate, null);
     db.close();
-});
-
-test('scrape_info round-trips per user', () => {
-    const db = seededDb();
-    const owner = getOwnerUser(db)!;
-    assert.deepEqual(getScrapeInfo(db, owner.id), { lastTriggerDate: null });
-    setScrapeInfo(db, owner.id, '2026-06-18');
-    assert.deepEqual(getScrapeInfo(db, owner.id), { lastTriggerDate: '2026-06-18' });
-    db.close();
-});
-
-test('migrateFromJson imports legacy json into the owner once', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jv-migrate-'));
-    fs.writeFileSync(path.join(dir, 'jobs.json'), JSON.stringify([
-        { id: 'm1', title: 'Migrated', company: 'Old', status: 'in_progress' },
-    ]));
-    fs.writeFileSync(path.join(dir, 'history.json'), JSON.stringify([
-        { date: '2026-05-01', wins: [], basePoints: 1, scoreMultiplier: 1, totalPoints: 1 },
-    ]));
-    fs.writeFileSync(path.join(dir, 'scrape_info.json'), JSON.stringify({ lastTriggerDate: '2026-05-02' }));
-    try {
-        const db = openDb(':memory:');
-        seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-        const owner = getOwnerUser(db)!;
-
-        migrateFromJson(db, owner.id, dir);
-        assert.equal(repoGetJobs(db, owner.id).length, 1);
-        assert.equal(getHistory(db, owner.id).length, 1);
-        assert.equal(getScrapeInfo(db, owner.id).lastTriggerDate, '2026-05-02');
-
-        migrateFromJson(db, owner.id, dir);
-        assert.equal(repoGetJobs(db, owner.id).length, 1);
-        db.close();
-    } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-    }
-});
-
-test('migrateFromJson tolerates legacy-shaped history without a date', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jv-migrate-legacy-'));
-    fs.writeFileSync(path.join(dir, 'jobs.json'), JSON.stringify([
-        { id: 'm1', title: 'Migrated', company: 'Old', status: 'new' },
-    ]));
-    // old history.json shape: weekRange/percent/jobTitles, no `date`
-    fs.writeFileSync(path.join(dir, 'history.json'), JSON.stringify([
-        { weekRange: 'Jan 12 - Jan 18', percent: 110, jobTitles: ['X', 'Y'] },
-    ]));
-    try {
-        const db = openDb(':memory:');
-        seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-        const owner = getOwnerUser(db)!;
-        migrateFromJson(db, owner.id, dir); // must not throw
-        assert.equal(repoGetJobs(db, owner.id).length, 1);
-        assert.equal(getHistory(db, owner.id).length, 0); // legacy row skipped
-        db.close();
-    } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-    }
-});
-
-import { seedDemoJobs } from './db.js';
-
-test('seedDemoJobs loads the fixture once for the demo user', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jv-sample-'));
-    const samplePath = path.join(dir, 'public-sample.json');
-    fs.writeFileSync(samplePath, JSON.stringify([
-        { id: 's1', title: 'Sample', company: 'Demo', status: 'new' },
-    ]));
-    try {
-        const db = openDb(':memory:');
-        seedUsers(db, { adminUsername: 'me', adminPassword: '0000' });
-        const demo = getDemoUser(db)!;
-        seedDemoJobs(db, samplePath);
-        assert.equal(repoGetJobs(db, demo.id).length, 1);
-        seedDemoJobs(db, samplePath);
-        assert.equal(repoGetJobs(db, demo.id).length, 1);
-        db.close();
-    } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-    }
 });

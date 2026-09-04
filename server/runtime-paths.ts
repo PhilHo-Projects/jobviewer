@@ -8,10 +8,14 @@ export interface RuntimePathOptions {
 export interface RuntimePaths {
     dataDir: string;
     dbPath: string;
-    legacyJsonDir: string;
     samplePath: string;
 }
 
+/**
+ * Single source of truth for on-disk locations. `dataDir` is the persistent volume;
+ * `samplePath` is the committed demo fixture, which ships with the image rather than
+ * the volume.
+ */
 export function resolveRuntimePaths(options: RuntimePathOptions = {}): RuntimePaths {
     const cwd = options.cwd ?? process.cwd();
     const dataDir = options.dataDirEnv || path.join(cwd, 'data');
@@ -19,7 +23,6 @@ export function resolveRuntimePaths(options: RuntimePathOptions = {}): RuntimePa
     return {
         dataDir,
         dbPath: path.join(dataDir, 'jobviewer.db'),
-        legacyJsonDir: dataDir,
         samplePath: path.join(cwd, 'public-sample.json'),
     };
 }

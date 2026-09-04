@@ -14,7 +14,6 @@ RUN npm prune --omit=dev
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production \
     PORT=3004 \
-    BASE_PATH=/job-viewer \
     DATA_DIR=/app/data
 WORKDIR /app
 COPY --from=build /app/package*.json ./

@@ -1,26 +1,27 @@
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
+import helmet from 'helmet';
+import { toNodeHandler, fromNodeHeaders } from 'better-auth/node';
 import type { Db } from './db.js';
+import type { AppAuth, SessionUser } from './auth.js';
+import { makeRequireWebhookSecret } from './auth.js';
+import type { AppConfig } from './config.js';
+import { requireUser, requireOwner, type AuthedRequest } from './guards.js';
 import {
-    attachUser,
-    createSessionToken,
-    verifyPassword,
-    buildSessionCookie,
-    buildClearCookie,
-    requireOwner,
-    requireWebhookSecret,
-    type AuthedRequest,
-} from './auth.js';
-import { getUserByUsername, getJobs, getHistory, getScrapeInfo, setScrapeInfo, getOwnerUser, upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus, createStableJobId } from './repo.js';
+    getJobs, getHistory, getScrapeInfo, setScrapeInfo, getOwnerId,
+    upsertJobs, getJobById, patchJob, bulkMove, deleteByStatus, createStableJobId,
+} from './repo.js';
+import { loadFixture, EMPTY_SCRAPE_INFO } from './fixture.js';
+import { registerAdminRoutes, pendingCount } from './admin.js';
+import { resolveRuntimePaths } from './runtime-paths.js';
+import { createRun, claimRun, countRunsToday, countUserRunsToday } from './scrape.js';
 import type { Job } from '../shared/types.js';
 
 export interface AppOptions {
-    secret: string;
-    dataDir: string;
+    auth: AppAuth;
+    config: AppConfig;
 }
-
-const BASE_PATH = '/job-viewer';
 
 function loadIdentity(dataDir: string): unknown {
     const candidates = [
@@ -40,132 +41,201 @@ function loadIdentity(dataDir: string): unknown {
 
 export function createApp(db: Db, opts: AppOptions): Express {
     const app = express();
-    app.use(express.json({ limit: '50mb' }));
+    // Read once at boot: the demo is a fixture, not an account.
+    const fixture = loadFixture(resolveRuntimePaths({ dataDirEnv: opts.config.dataDir }).samplePath);
+    const requireWebhookSecret = makeRequireWebhookSecret(opts.config.webhookSecret);
 
-    app.use((_req: Request, res: Response, next: NextFunction) => {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS,DELETE');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Webhook-Secret');
-        if (_req.method === 'OPTIONS') return res.sendStatus(204);
+    app.use(helmet());
+
+    // Better Auth reads the raw request body, so its handler must be registered before
+    // any body parser. Express 4 wildcard syntax: '*', not Express 5's '*splat'.
+    app.all('/api/auth/*', toNodeHandler(opts.auth));
+
+    // Before the global body parser: this route needs a larger limit than everything
+    // else, and a route-local parser mounted after the global one would never see the
+    // body. It authenticates with WEBHOOK_SECRET rather than a session, so it does not
+    // need the session middleware and is safe this early in the chain.
+    app.post(
+        '/api/receive-jobs',
+        express.json({ limit: '20mb' }),
+        requireWebhookSecret,
+        (req: Request, res: Response) => {
+            // A bare array is the scheduled workflow, which has no user context and
+            // delivers to the owner exactly as it always has. An object carrying a
+            // runId is a user-initiated scrape, and the run decides whose board it
+            // lands on — n8n never names the user.
+            const body = req.body;
+            const isBareArray = Array.isArray(body);
+            const runId: unknown = isBareArray ? undefined : body?.runId;
+            const incomingJobs: unknown = isBareArray ? body : body?.jobs;
+
+            if (!Array.isArray(incomingJobs)) {
+                return res.status(400).json({ error: 'Payload must be an array of jobs' });
+            }
+
+            const targetId = runId
+                ? claimRun(db, String(runId), opts.config.runExpiryMinutes)
+                : getOwnerId(db);
+
+            if (!targetId) {
+                return runId
+                    ? res.status(409).json({ error: 'Unknown, consumed or expired run' })
+                    : res.status(500).json({ error: 'No owner configured' });
+            }
+
+            const incoming = incomingJobs.filter(Boolean);
+            const before = getJobs(db, targetId).length;
+            upsertJobs(db, targetId, incoming);
+            const after = getJobs(db, targetId).length;
+            return res.status(201).json({
+                message: 'Jobs received successfully',
+                received: incoming.length, before, after,
+            });
+        },
+    );
+
+    // Checked before the session is resolved, so a cross-origin caller gets nothing —
+    // not even the cost of a session lookup. Sits after `receive-jobs` deliberately:
+    // that route is server-to-server, sends no Origin, and is authenticated by
+    // WEBHOOK_SECRET instead, so ordering exempts it without a path special-case.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+        const isApi = req.path.startsWith('/api');
+        const isUnsafe = req.method === 'POST' || req.method === 'PATCH' || req.method === 'DELETE';
+        if (isApi && isUnsafe && req.headers.origin !== opts.config.publicOrigin) {
+            res.status(403).json({ error: 'Request origin is not allowed' });
+            return;
+        }
         next();
     });
 
+    app.use(express.json({ limit: '1mb' }));
+
     const distPath = path.join(process.cwd(), 'dist');
     if (fs.existsSync(distPath)) {
-        app.use(BASE_PATH, express.static(distPath));
-        app.get(`${BASE_PATH}/*`, (req: Request, res: Response, next: NextFunction) => {
-            if (req.path.startsWith(`${BASE_PATH}/api`)) return next();
+        app.use(express.static(distPath));
+        app.get('*', (req: Request, res: Response, next: NextFunction) => {
+            if (req.path.startsWith('/api')) return next();
             res.sendFile(path.join(distPath, 'index.html'));
         });
     }
 
-    app.use(attachUser(db, opts.secret));
+    // `req.user` is the session user or null. There is deliberately no demo fallback —
+    // that is what makes an expired session distinguishable from an anonymous visitor.
+    app.use(async (req: AuthedRequest, _res: Response, next: NextFunction) => {
+        const session = await opts.auth.api.getSession({
+            headers: fromNodeHeaders(req.headers),
+        });
+        req.user = (session?.user as SessionUser | undefined) ?? null;
+        next();
+    });
 
-    // --- Auth routes ---
-    app.get(`${BASE_PATH}/api/me`, (req: AuthedRequest, res: Response) => {
+    app.get('/api/me', (req: AuthedRequest, res: Response) => {
         const user = req.user;
         res.json({
-            authenticated: user?.role === 'owner',
+            authenticated: !!user,
             username: user?.username ?? null,
             role: user?.role ?? null,
-            isDemo: user?.role === 'demo',
+            isDemo: !user,
+            // Drives the owner's pending-accounts badge; nobody else needs the number.
+            pendingCount: user?.role === 'owner' ? pendingCount(db) : 0,
         });
     });
 
-    app.post(`${BASE_PATH}/api/login`, (req: Request, res: Response) => {
-        const { username, password } = req.body || {};
-        if (typeof username !== 'string' || typeof password !== 'string') {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        const user = getUserByUsername(db, username);
-        if (!user || user.role === 'demo' || !user.password_hash || !verifyPassword(password, user.password_hash)) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        const token = createSessionToken(user.id, opts.secret);
-        res.setHeader('Set-Cookie', buildSessionCookie(token, BASE_PATH));
-        res.json({ username: user.username, role: user.role });
-    });
+    registerAdminRoutes(app, db);
 
-    app.post(`${BASE_PATH}/api/logout`, (_req: Request, res: Response) => {
-        res.setHeader('Set-Cookie', buildClearCookie(BASE_PATH));
-        res.json({ ok: true });
-    });
-
-    // --- Owner-only write routes ---
-    app.post(`${BASE_PATH}/api/jobs`, requireOwner, (req: AuthedRequest, res: Response) => {
+    // --- Per-user write routes, scoped to the caller ---
+    app.post('/api/jobs', requireUser, (req: AuthedRequest, res: Response) => {
         const payload = req.body;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
             return res.status(400).json({ error: 'Payload must be a job object' });
         }
         // Resolve the id the same way upsertJobs will, so we can return the exact
-        // saved row (getJobs has no ORDER BY, so positional lookup is unreliable).
+        // saved row rather than relying on positional lookup.
         const id = payload.id || createStableJobId(payload as Partial<Job>);
-        const existed = !!getJobById(db, req.userId!, id);
-        upsertJobs(db, req.userId!, [payload as Partial<Job>]);
-        const saved = getJobById(db, req.userId!, id);
+        const existed = !!getJobById(db, req.user!.id, id);
+        upsertJobs(db, req.user!.id, [payload as Partial<Job>]);
+        const saved = getJobById(db, req.user!.id, id);
         return res.status(existed ? 200 : 201).json(saved);
     });
 
-    app.patch(`${BASE_PATH}/api/jobs/bulk-move`, requireOwner, (req: AuthedRequest, res: Response) => {
+    app.patch('/api/jobs/bulk-move', requireUser, (req: AuthedRequest, res: Response) => {
         const { from, to } = req.body || {};
         if (!from || !to) {
             return res.status(400).json({ error: 'Source (from) and target (to) statuses are required' });
         }
-        const moved = bulkMove(db, req.userId!, from, to);
+        const moved = bulkMove(db, req.user!.id, from, to);
         res.json({ moved, from, to });
     });
 
-    app.patch(`${BASE_PATH}/api/jobs/:id`, requireOwner, (req: AuthedRequest, res: Response) => {
-        const updated = patchJob(db, req.userId!, String(req.params.id), req.body || {});
+    app.patch('/api/jobs/:id', requireUser, (req: AuthedRequest, res: Response) => {
+        const updated = patchJob(db, req.user!.id, String(req.params.id), req.body || {});
         if (!updated) return res.status(404).json({ message: 'Job not found' });
         res.json(updated);
     });
 
-    app.delete(`${BASE_PATH}/api/jobs/status/:status`, requireOwner, (req: AuthedRequest, res: Response) => {
-        const deleted = deleteByStatus(db, req.userId!, String(req.params.status));
-        res.json({ deleted, remaining: getJobs(db, req.userId!).length });
+    app.delete('/api/jobs/status/:status', requireUser, (req: AuthedRequest, res: Response) => {
+        const deleted = deleteByStatus(db, req.user!.id, String(req.params.status));
+        res.json({ deleted, remaining: getJobs(db, req.user!.id).length });
     });
 
-    // --- Scoped read routes (owner sees real data, anon sees demo) ---
-    app.get(`${BASE_PATH}/api/jobs`, (req: AuthedRequest, res: Response) => {
-        res.json(getJobs(db, req.userId!));
+    // --- Scoped read routes: a session reads its own rows, anonymous reads the fixture ---
+    app.get('/api/jobs', (req: AuthedRequest, res: Response) => {
+        if (!req.user) return res.json(fixture);
+        res.json(getJobs(db, req.user.id));
     });
 
-    app.get(`${BASE_PATH}/api/history`, (req: AuthedRequest, res: Response) => {
-        res.json(getHistory(db, req.userId!));
+    app.get('/api/history', (req: AuthedRequest, res: Response) => {
+        if (!req.user) return res.json([]);
+        res.json(getHistory(db, req.user.id));
     });
 
-    app.get(`${BASE_PATH}/api/scrape-info`, (req: AuthedRequest, res: Response) => {
-        res.json(getScrapeInfo(db, req.userId!));
+    app.get('/api/scrape-info', (req: AuthedRequest, res: Response) => {
+        if (!req.user) return res.json(EMPTY_SCRAPE_INFO);
+        res.json(getScrapeInfo(db, req.user.id));
     });
 
-    // --- Owner-only n8n integrations ---
-    app.post(`${BASE_PATH}/api/trigger-scrape`, requireOwner, async (req: AuthedRequest, res: Response) => {
-        const webhookUrl = process.env.N8N_SCRAPE_URL;
-        if (!webhookUrl) return res.status(500).json({ error: 'N8N_SCRAPE_URL is not configured' });
-
-        const info = getScrapeInfo(db, req.userId!);
-        const today = new Date().toISOString().split('T')[0];
-        if (info.lastTriggerDate === today) {
+    // --- n8n integrations ---
+    app.post('/api/trigger-scrape', requireUser, async (req: AuthedRequest, res: Response) => {
+        // Caller-facing limits are checked before the server-side configuration guard,
+        // so a misconfigured webhook cannot mask "you already scraped today".
+        if (countUserRunsToday(db, req.user!.id) >= 1) {
             return res.status(429).json({ error: 'Scrape already triggered today. Limit: 1 per day.' });
         }
+        // Separate per-user scrapes multiply Apify cost linearly, so there is also a
+        // shared ceiling. Better a visible cap than a surprise empty balance.
+        if (countRunsToday(db) >= opts.config.scrapeDailyLimit) {
+            return res.status(429).json({
+                error: 'The shared daily scrape budget is spent. Try again tomorrow.',
+            });
+        }
+
+        const webhookUrl = opts.config.n8nScrapeUrl;
+        if (!webhookUrl) return res.status(500).json({ error: 'N8N_SCRAPE_URL is not configured' });
+
+        const today = new Date().toISOString().split('T')[0];
+        const runId = createRun(db, req.user!.id);
         try {
-            const response = await fetch(webhookUrl, { method: 'GET' });
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ runId }),
+            });
             if (!response.ok) throw new Error(`n8n responded with status: ${response.status}`);
-            setScrapeInfo(db, req.userId!, today);
-            res.json({ message: 'Scrape triggered successfully', lastTriggerDate: today });
+            setScrapeInfo(db, req.user!.id, today);
+            res.json({ message: 'Scrape triggered successfully', lastTriggerDate: today, runId });
         } catch (err: any) {
             console.error('Failed to trigger n8n:', err);
             res.status(500).json({ error: `Failed to trigger n8n: ${err.message}` });
         }
     });
 
-    app.post(`${BASE_PATH}/api/generate-cover-letter`, requireOwner, async (req: Request, res: Response) => {
-        const webhookUrl = process.env.N8N_COVER_LETTER_URL;
+    // Owner-only: reads the owner's own identity.json. Members get static templates.
+    app.post('/api/generate-cover-letter', requireOwner, async (req: Request, res: Response) => {
+        const webhookUrl = opts.config.n8nCoverLetterUrl;
         if (!webhookUrl) return res.status(500).json({ error: 'N8N_COVER_LETTER_URL is not configured' });
         try {
             const { job } = req.body || {};
-            const identity = loadIdentity(opts.dataDir);
+            const identity = loadIdentity(opts.config.dataDir);
             const response = await fetch(webhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -188,24 +258,6 @@ export function createApp(db: Db, opts: AppOptions): Express {
             console.error('Failed to generate cover letter via n8n:', err);
             res.status(500).json({ error: `Failed to generate cover letter: ${err.message}` });
         }
-    });
-
-    // --- Inbound delivery from n8n (server-to-server, shared secret) ---
-    app.post(`${BASE_PATH}/api/receive-jobs`, requireWebhookSecret, (req: Request, res: Response) => {
-        const payload = req.body;
-        if (!Array.isArray(payload)) {
-            return res.status(400).json({ error: 'Payload must be an array of jobs' });
-        }
-        const owner = getOwnerUser(db);
-        if (!owner) return res.status(500).json({ error: 'No owner configured' });
-        const incoming = payload.filter(Boolean);
-        const before = getJobs(db, owner.id).length;
-        upsertJobs(db, owner.id, incoming);
-        const after = getJobs(db, owner.id).length;
-        return res.status(201).json({
-            message: 'Jobs received successfully',
-            received: incoming.length, before, after,
-        });
     });
 
     return app;

@@ -1,23 +1,20 @@
-import { openDb, seedUsers, seedDemoJobs, migrateFromJson } from './server/db.js';
-import { loadOrCreateSecret } from './server/auth.js';
-import { getOwnerUser } from './server/repo.js';
+import { openDb } from './server/db.js';
+import { loadConfig } from './server/config.js';
+import { buildAuth } from './server/auth.js';
+import { ensureOwner } from './server/owner.js';
 import { createApp } from './server/app.js';
 import { resolveRuntimePaths } from './server/runtime-paths.js';
 
-const PORT = Number(process.env.PORT) || 3004;
-const paths = resolveRuntimePaths({ dataDirEnv: process.env.DATA_DIR });
+const config = loadConfig(process.env);
+const paths = resolveRuntimePaths({ dataDirEnv: config.dataDir });
 
 const db = openDb(paths.dbPath);
-seedUsers(db);
-seedDemoJobs(db, paths.samplePath);
+const auth = buildAuth({ db, config });
+const ownerId = await ensureOwner({ auth, db, config, log: (m) => console.log(m) });
+console.log(`owner id: ${ownerId}`);
 
-const owner = getOwnerUser(db);
-if (owner) migrateFromJson(db, owner.id, paths.legacyJsonDir);
-
-const secret = loadOrCreateSecret(paths.dataDir);
-const app = createApp(db, { secret, dataDir: paths.dataDir });
-
-app.listen(PORT, () => {
-    console.log(`Job Viewer running on port ${PORT}`);
-    console.log(`Access at: http://localhost:${PORT}/job-viewer`);
+const app = createApp(db, { auth, config });
+app.listen(config.port, () => {
+    console.log(`Job Viewer running on port ${config.port}`);
+    console.log(`Access at: ${config.publicOrigin}`);
 });
