@@ -543,6 +543,23 @@
                 </button>
             </header>
             <div class="overflow-y-auto divide-y-2 divide-black">
+                <section class="p-4 space-y-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span id="account-username" class="text-base font-black text-theme-primary truncate"></span>
+                        <span id="account-role"
+                            class="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest border-2 border-black"></span>
+                        <span id="account-approval"
+                            class="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest border-2 border-black"></span>
+                    </div>
+                    <div id="account-email" class="text-[11px] text-theme-muted truncate"></div>
+                    <div class="text-[11px] text-theme-muted">Member since <span id="account-since">—</span></div>
+                </section>
+
+                <section class="p-4 space-y-1">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-theme-muted">Daily scrape</div>
+                    <div id="account-scrape-status" class="text-sm font-black uppercase tracking-widest"></div>
+                    <div id="account-scrape-last" class="text-[11px] text-theme-muted"></div>
+                </section>
             </div>
         </div>
     </div>

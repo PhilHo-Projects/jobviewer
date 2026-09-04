@@ -72,7 +72,14 @@ export const els: Record<string, HTMLElement | null> = {
     menuAdminBadge: null,
     menuLogout: null,
     accountBackdrop: null,
-    accountClose: null
+    accountClose: null,
+    accountUsername: null,
+    accountRole: null,
+    accountApproval: null,
+    accountEmail: null,
+    accountSince: null,
+    accountScrapeStatus: null,
+    accountScrapeLast: null
 };
 
 export function $(id: string): HTMLElement | null {

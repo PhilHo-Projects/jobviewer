@@ -7,6 +7,7 @@ import { openAuthModal, closeAuthModal, submitAuth, wireAuthTabs } from './compo
 import { openAdminPanel, closeAdminPanel, refreshPendingBadge } from './components/admin';
 import { renderAccountChip, wireAccountMenu, closeAccountMenu } from './components/accountMenu';
 import { openAccountModal, closeAccountModal, wireAccountModal } from './components/accountModal';
+import { scrapeUsedToday, todayIso } from './account';
 import { groupJobs } from './utils';
 import { renderBoard, wireDropzones } from './components/board';
 import { openModal, saveModal, closeModal, openScoreboard, closeScoreboard, openBin, closeBin, openConfirm, closeConfirm, openCoverLetterModal, closeCoverLetterModal, setCoverLetterTemplate, downloadCoverLetterPDF, generateCoverLetterWithAI } from './components/modals';
@@ -68,6 +69,13 @@ async function init(): Promise<void> {
     els.menuLogout = $('menu-logout');
     els.accountBackdrop = $('account-backdrop');
     els.accountClose = $('account-close');
+    els.accountUsername = $('account-username');
+    els.accountRole = $('account-role');
+    els.accountApproval = $('account-approval');
+    els.accountEmail = $('account-email');
+    els.accountSince = $('account-since');
+    els.accountScrapeStatus = $('account-scrape-status');
+    els.accountScrapeLast = $('account-scrape-last');
     els.scoreboardBtn = $('view-scoreboard');
     els.scoreboardBackdrop = $('scoreboard-backdrop');
     els.sprintPointsText = $('sprint-points-text');
@@ -268,7 +276,7 @@ async function init(): Promise<void> {
     });
 
     if (els.menuAdmin) els.menuAdmin.addEventListener('click', openAdminPanel);
-    if (els.menuAccount) els.menuAccount.addEventListener('click', openAccountModal);
+    if (els.menuAccount) els.menuAccount.addEventListener('click', () => { void openAccountModal(); });
     if (els.adminClose) els.adminClose.addEventListener('click', closeAdminPanel);
     if (els.adminBackdrop) els.adminBackdrop.addEventListener('click', (e) => {
         if (e.target === els.adminBackdrop) closeAdminPanel();
@@ -308,16 +316,11 @@ function applyAuthVisibility(authenticated: boolean, owner: boolean): void {
 async function updateScrapeButtonStatus() {
     try {
         const info = await fetchScrapeInfo();
-        const today = new Date().toISOString().split('T')[0];
         if (els.scrapeBtn) {
             const btn = els.scrapeBtn as HTMLButtonElement;
-            if (info.lastTriggerDate === today) {
-                btn.disabled = true;
-                btn.title = "Scrape already triggered today";
-            } else {
-                btn.disabled = false;
-                btn.title = "Trigger Scrape (Max 1/day)";
-            }
+            const used = scrapeUsedToday(info.lastTriggerDate, todayIso());
+            btn.disabled = used;
+            btn.title = used ? 'Scrape already triggered today' : 'Trigger Scrape (Max 1/day)';
         }
     } catch (e) {
         console.error("Failed to update scrape button status", e);
