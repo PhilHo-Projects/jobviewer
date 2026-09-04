@@ -14,6 +14,7 @@ import {
 } from './repo.js';
 import { loadFixture, EMPTY_SCRAPE_INFO } from './fixture.js';
 import { registerAdminRoutes, pendingCount } from './admin.js';
+import { resolveRuntimePaths } from './runtime-paths.js';
 import { createRun, claimRun, countRunsToday, countUserRunsToday } from './scrape.js';
 import type { Job } from '../shared/types.js';
 
@@ -41,7 +42,7 @@ function loadIdentity(dataDir: string): unknown {
 export function createApp(db: Db, opts: AppOptions): Express {
     const app = express();
     // Read once at boot: the demo is a fixture, not an account.
-    const fixture = loadFixture(path.join(process.cwd(), 'public-sample.json'));
+    const fixture = loadFixture(resolveRuntimePaths({ dataDirEnv: opts.config.dataDir }).samplePath);
     const requireWebhookSecret = makeRequireWebhookSecret(opts.config.webhookSecret);
 
     app.use(helmet());
