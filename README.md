@@ -73,6 +73,57 @@ Environment variables are listed in `.env.example`. All of `PUBLIC_ORIGIN`,
 `SESSION_SECRET`, `OWNER_EMAIL`, `OWNER_PASSWORD` and `WEBHOOK_SECRET` are required; the
 app refuses to start without them, by design.
 
+### Releasing a new version
+
+> **`POST /api/v1/deploy` does not ship code.** The service's compose pins
+> `image: job-viewer:coolify` with `pull_policy: never` and carries no `build:` key, so
+> Coolify only ever recreates the container from whatever image already holds that tag.
+> It does not clone the repo and it does not build. Deploying on its own republishes the
+> identical bytes and returns a healthy 200 — a successful-looking no-op.
+
+Build the image on the server first:
+
+```bash
+ssh phil@95.217.6.255
+cd /home/phil/projects/job-viewer
+git fetch origin && git reset --hard origin/main
+sudo docker build -t job-viewer:coolify .
+```
+
+Then recreate the container onto the new image:
+
+```bash
+curl -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "https://coolify.philippeho.dev/api/v1/deploy?uuid=l4eas83izr96sj3q9hmdgln9"
+```
+
+Traefik takes 30–60s to pick up the new container. Confirm the release actually landed by
+grepping the served HTML for a marker only the new build has, rather than trusting the
+status code:
+
+```bash
+curl -s https://jobs.philippeho.dev/ | grep -c 'id="account-chip"'
+```
+
+`/home/phil/projects/job-viewer` is a build checkout only — nothing reads it at runtime,
+and it has been found sitting two merges behind the image that was actually running.
+Always `git reset --hard origin/main` before building instead of assuming it is current.
+
+### Rolling back
+
+Rebuild from the last good commit:
+
+```bash
+cd /home/phil/projects/job-viewer
+git checkout <known-good-sha>
+sudo docker build -t job-viewer:coolify .
+```
+
+then redeploy as above, and `git checkout main` when you are done.
+
+> **A backup tag will not save you.** Coolify prunes images no container references, so a
+> `job-viewer:rollback-<date>` tag kept as a safety net disappears on its own. One created
+> on 2026-09-04 was already gone by 2026-09-19. Roll back by rebuilding, not by retagging.
+
 ### Backing up before a migration
 
 > The database runs in WAL mode and the WAL is not always checkpointed. Copying
