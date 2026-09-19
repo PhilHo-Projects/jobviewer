@@ -340,6 +340,14 @@ unnoticed and silently fell back to a generated file.
 
 ## 10. Deployment
 
+> **Correction, 2026-09-19.** "Deploys go through `POST /api/v1/deploy?uuid=<uuid>`" is
+> incomplete, and it has since cost a release. That endpoint only recreates the container
+> from the existing `job-viewer:coolify` image — the service's compose sets
+> `pull_policy: never` and has no `build:` key, so nothing is ever built or pulled. The
+> image must be built on the server first. **README's *Releasing a new version* is the
+> live procedure; follow that, not this section**, which is kept as the record of the
+> 2026-09-04 cutover.
+
 job-viewer is a Coolify **service**, not an application — the applications API 404s on
 its UUID (`l4eas83izr96sj3q9hmdgln9`). Env vars and deploys go through
 `/api/v1/services/<uuid>/envs` and `POST /api/v1/deploy?uuid=<uuid>`.
