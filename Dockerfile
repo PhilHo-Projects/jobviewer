@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS deps
+FROM node:22.23.3-alpine AS deps
 WORKDIR /app
 # build toolchain for the better-sqlite3 native module (musl => must compile)
 RUN apk add --no-cache python3 make g++
@@ -11,7 +11,7 @@ COPY . .
 RUN npm run build
 RUN npm prune --omit=dev
 
-FROM node:22-alpine AS runner
+FROM node:22.23.3-alpine AS runner
 ENV NODE_ENV=production \
     PORT=3004 \
     DATA_DIR=/app/data
