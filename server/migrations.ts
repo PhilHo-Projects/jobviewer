@@ -50,8 +50,8 @@ export const MIGRATIONS: Migration[] = [
     // `rateLimit.storage` is 'database'.
     //
     // Do NOT regenerate this with `@better-auth/cli`: that package is deprecated and
-    // pinned at 1.4.21, and the schema it emits has no `account.issuer` column, which
-    // makes sign-up fail at runtime with "table account has no column named issuer".
+    // pinned at 1.4.21. The `account.issuer` column below was required by 1.7.0-1.7.2
+    // only; migration 5 drops it for 1.7.3+.
     //
     // Its identifiers are camelCase and double-quoted while ours are snake_case. Both
     // are correct — `user` is also a SQL reserved word, so it must stay quoted.
@@ -180,6 +180,21 @@ export const MIGRATIONS: Migration[] = [
                 consumed_at TEXT
             );
             CREATE INDEX scrape_runs_user_idx ON scrape_runs(user_id, created_at);
+        `,
+    },
+    // Better Auth 1.7.3+ identifies accounts by (providerId, accountId) again, never writes
+    // `account.issuer`, and refuses to start while that column is NOT NULL. Drop the index
+    // first: SQLite will not drop a column an index still covers.
+    //
+    // No duplicate check is needed: every account 1.7.1 wrote is local, with
+    // issuer = 'local:' || providerId, so the old unique (issuer, accountId) index already
+    // kept (providerId, accountId) unique. scripts/undo-auth-migration-5.sql restores the
+    // column exactly for a rollback to 1.7.1.
+    {
+        version: 5,
+        sql: `
+            DROP INDEX IF EXISTS "account_issuer_accountId_uidx";
+            ALTER TABLE "account" DROP COLUMN "issuer";
         `,
     },
 ];

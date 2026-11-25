@@ -86,13 +86,40 @@ test('migration 2 creates the Better Auth tables', () => {
     db.close();
 });
 
-test('the account table has an issuer column', () => {
-    // The deprecated @better-auth/cli omits this column, and without it sign-up fails
-    // at runtime under better-auth 1.7.1 with "table account has no column named
-    // issuer". Pinned so a future regeneration cannot quietly drop it.
+test('migration 5 drops account.issuer, which Better Auth 1.7.3+ never writes', () => {
     const db = new Database(':memory:');
     migrate(db);
-    assert.ok(columnNames(db, 'account').includes('issuer'));
+    assert.ok(!columnNames(db, 'account').includes('issuer'));
+    const indexes = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'account'`)
+        .all()
+        .map((r: any) => r.name);
+    assert.ok(!indexes.includes('account_issuer_accountId_uidx'));
+    db.close();
+});
+
+test('migration 5 keeps existing users and accounts', () => {
+    // Production's shape before this release: migrated to version 4, issuer present.
+    const db = new Database(':memory:');
+    for (const m of MIGRATIONS.filter((m) => m.version <= 4)) {
+        db.exec(m.sql);
+    }
+    db.exec(`
+        CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+        INSERT INTO schema_migrations VALUES (1, 'x'), (2, 'x'), (3, 'x'), (4, 'x');
+        INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt", "role", "approvalStatus")
+            VALUES ('user-1', 'Phil', 'phil@example.test', 1, '2026-09-04', '2026-09-04', 'owner', 'approved');
+        INSERT INTO "account" ("id", "issuer", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
+            VALUES ('account-1', 'local:credential', 'user-1', 'credential', 'user-1', 'hash', '2026-09-04', '2026-09-04');
+    `);
+    migrate(db);
+    assert.ok(appliedVersions(db).includes(5));
+    assert.ok(!columnNames(db, 'account').includes('issuer'));
+    assert.deepEqual(
+        { ...(db.prepare(`SELECT "providerId", "password" FROM "account" WHERE "id" = ?`).get('account-1') as object) },
+        { providerId: 'credential', password: 'hash' },
+    );
+    assert.equal((db.prepare(`SELECT count(*) AS n FROM "user"`).get() as { n: number }).n, 1);
     db.close();
 });
 
