@@ -6,9 +6,13 @@ UI, Express + SQLite backend, deployed on Coolify.
 ## Architecture
 
 - Vanilla TypeScript frontend built with Vite.
-- Express 4 + TypeScript API on Node 24.
+- Express 4 + TypeScript API on Node 22 (the Dockerfile's `node:22.x-alpine` pin).
 - `better-sqlite3` in WAL mode on a persistent volume.
-- Better Auth 1.7.1 owns identity entirely; there is no second auth path.
+- Better Auth 1.7.28 (exact pin) owns identity entirely; there is no second auth path.
+  Migration 5 dropped the `account.issuer` column that 1.7.0–1.7.2 required; 1.7.3+
+  refuses to start while it exists. `scripts/undo-auth-migration-5.sql` restores it for a
+  rollback to 1.7.1. After any Better Auth bump, run the full suite on the production Node
+  version and `(await auth.$context).checkSchema()` against a copy of the live database.
 - Jobs are delivered by an n8n workflow over a shared-secret webhook.
 
 ## Accounts
@@ -80,8 +84,14 @@ app refuses to start without them, by design.
 > Coolify only ever recreates the container from whatever image already holds that tag.
 > It does not clone the repo and it does not build. Deploying on its own republishes the
 > identical bytes and returns a healthy 200 — a successful-looking no-op.
+>
+> The tag must be exactly `job-viewer:coolify`. The 2026-10-20 maintenance release ran a
+> container from `job-viewer:maintenance-<sha>` instead, the `:coolify` tag was pruned,
+> and until 2026-11-25 any Coolify restart would have failed on the missing image.
 
-Build the image on the server first:
+Converting this to a Git-backed Coolify application would mean creating a new resource
+(the API token has no write scope) and moving the domain and bind mount; until then this
+manual build is the release path. Build the image on the server first:
 
 ```bash
 ssh phil@95.217.6.255
